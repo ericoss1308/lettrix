@@ -448,6 +448,7 @@
     background:var(--steel); border:1px solid var(--steel-line); border-radius:8px;
     padding:16px 22px; margin:6px 0 18px;
   }
+  .versus-code-box[hidden]{ display:none; }
   .versus-code-label{ font-size:10px; letter-spacing:.18em; color:var(--mist); text-transform:uppercase; }
   .versus-code-value{
     font-size:clamp(26px,7vw,36px); font-weight:800; letter-spacing:.3em; color:var(--signal);
@@ -2673,6 +2674,12 @@
   function clearTyping(){
     typedBuffer = ""; typedHits = []; trackedIds = [];
     renderPrompt();
+    // Sem isso, o campo invisível do teclado do celular (mobile-typer) fica
+    // com o texto antigo. Como typedBuffer virou "" (prefixo de qualquer
+    // string), o próximo evento "input" nele reinjeta letra por letra o que
+    // tinha sobrado — a mensagem "volta a aparecer" mesmo já tendo sido
+    // apagada (ex: Ctrl+A seguido de Delete).
+    syncMobileTyperValue();
   }
 
   function trySubmit(){
