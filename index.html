@@ -571,7 +571,7 @@
   .avatar-dropdown button:hover{ background:var(--steel-2); color:var(--signal); }
   .avatar-dropdown button#avatar-menu-remove{ color:var(--alert); }
   .avatar-dropdown button#avatar-menu-remove:hover{ background:rgba(255,90,90,.12); color:var(--alert); }
-  .avatar-dropdown[hidden]{ display:none; }
+  .avatar-dropdown[hidden]{ display:none !important; }
 
   /* ---------- Cartão de informações da conta ---------- */
   .account-info-card{
@@ -2464,6 +2464,13 @@
   }
 
   window.addEventListener("keydown", (e) => {
+    // Se o foco está num campo de texto de verdade (ex.: e-mail, senha, @usuário),
+    // deixa o navegador cuidar normalmente e não aplica nenhum atalho do jogo.
+    const active = document.activeElement;
+    if (active && active !== mobileTyper && (active.tagName === "INPUT" || active.tagName === "TEXTAREA" || active.isContentEditable)){
+      return;
+    }
+
     if (state === "idle" && e.key === "Enter" && settingsScreen.hidden){ startGame(); return; }
 
     if (e.key === "Escape"){
@@ -3151,6 +3158,7 @@
     fromScreen.hidden = true;
     accountScreen.hidden = false;
     accountScreen.dataset.from = fromScreen.id;
+    document.getElementById("avatar-dropdown").hidden = true;
     document.getElementById("auth-email").value = "";
     document.getElementById("auth-password").value = "";
     renderAccountUI();
