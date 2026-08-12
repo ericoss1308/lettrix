@@ -3637,27 +3637,6 @@
     document.getElementById("searching-tier-badge").innerHTML = tierBadgeHTML(mmState.myMmr);
     document.getElementById("versus-searching-status").textContent = "Procurando alguém no seu nível…";
 
-    const av = versusMyAvatar();
-    const myId = currentUser.id;
-    try{
-      await supabaseClient.from("matchmaking_queue").delete().eq("user_id", myId);
-      await supabaseClient.from("matchmaking_queue").insert({
-        user_id: myId,
-        name: "@" + currentProfile.username,
-        avatar_url: av.avatarUrl,
-        avatar_pos: av.avatarPos,
-        mmr: mmState.myMmr
-      });
-    }catch(e){
-      cancelRankedSearch();
-      const st = document.getElementById("play-mode-status");
-      st.textContent = "Não foi possível entrar na fila agora.";
-      st.classList.add("error");
-      hideAllVersusScreens();
-      document.getElementById("play-mode-screen").hidden = false;
-      return;
-    }
-
     mmState.interval = setInterval(pollMatchmakingQueue, 2000);
     pollMatchmakingQueue();
   }
@@ -3673,54 +3652,30 @@
 
   async function pollMatchmakingQueue(){
     if (!mmState.active || !currentUser) return;
-    const myId = currentUser.id;
+    const av = versusMyAvatar();
     try{
-      const { data: sessionData } = await supabaseClient.auth.getSession();
-      const accessToken = sessionData.session && sessionData.session.access_token;
-      if (!accessToken) return;
-      const url = `${SUPABASE_URL}/rest/v1/matchmaking_queue?select=*&order=created_at.asc`;
-      const res = await fetch(url, {
-        headers: { "apikey": SUPABASE_ANON_KEY, "Authorization": `Bearer ${accessToken}` }
+      // O pareamento roda inteiro dentro do banco (função find_ranked_match,
+      // com trava de linha) pra garantir que só um dos dois lados vira host —
+      // evita a corrida de cada cliente decidir sozinho com dados desatualizados.
+      const { data, error } = await supabaseClient.rpc("find_ranked_match", {
+        p_user_id: currentUser.id,
+        p_name: "@" + currentProfile.username,
+        p_avatar_url: av.avatarUrl,
+        p_avatar_pos: av.avatarPos,
+        p_mmr: mmState.myMmr
       });
-      if (!res.ok) return;
-      const rows = await res.json();
+      if (error || !data || !data.length) return;
 
-      // Alguém já me convidou pra sala dele?
-      const inviteRow = rows.find(r => r.invite_target === myId);
-      if (inviteRow){
-        mmState.active = false;
-        if (mmState.interval){ clearInterval(mmState.interval); mmState.interval = null; }
-        try{ await supabaseClient.from("matchmaking_queue").delete().eq("user_id", myId); }catch(e){}
-        openVersusChannel(inviteRow.invite_code, false, true);
-        return;
-      }
+      const { room_code, is_host } = data[0];
+      if (!room_code) return; // ainda esperando alguém
 
-      if (mmState.hosting) return; // já estou hospedando, só aguardando o adversário entrar
-
-      // Descarta minha própria linha, quem já está sendo convidado, e linhas velhas
-      // (alguém que fechou o app sem cancelar a busca — "fantasma" na fila).
-      const STALE_MS = 2 * 60 * 1000;
-      const now = Date.now();
-      const candidates = rows.filter(r =>
-        r.user_id !== myId && !r.invite_target && (now - new Date(r.created_at).getTime()) < STALE_MS
-      );
-      if (!candidates.length) return;
-
-      // Prefere o oponente com MMR mais próximo do meu
-      candidates.sort((a, b) => Math.abs(a.mmr - mmState.myMmr) - Math.abs(b.mmr - mmState.myMmr));
-      const opp = candidates[0];
-
-      // Só um dos dois lados cria a sala, decidido de forma determinística (mesmo id nos dois clientes)
-      if (myId < opp.user_id){
-        const code = randomRoomCode();
-        mmState.hosting = true;
-        await supabaseClient.from("matchmaking_queue")
-          .update({ invite_code: code, invite_target: opp.user_id })
-          .eq("user_id", myId);
+      mmState.active = false;
+      if (mmState.interval){ clearInterval(mmState.interval); mmState.interval = null; }
+      mmState.hosting = !!is_host;
+      if (is_host){
         document.getElementById("versus-searching-status").textContent = "Oponente encontrado! Preparando a sala…";
-        openVersusChannel(code, true, true);
       }
-      // Se myId > opp.user_id, não faz nada: é o outro lado que vai me convidar.
+      openVersusChannel(room_code, !!is_host, true);
     }catch(e){ /* tenta de novo no próximo ciclo */ }
   }
 
