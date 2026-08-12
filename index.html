@@ -823,7 +823,7 @@
             <input type="text" id="username-input" placeholder="seu_usuario" maxlength="18">
             <button class="btn" id="save-username-btn">Salvar</button>
           </div>
-          <div class="profile-username-hint">3 a 18 letras minúsculas, números ou "_". Único — ninguém mais pode usar o mesmo @.</div>
+          <div class="profile-username-hint">2 a 18 letras minúsculas, números ou "_". Único — ninguém mais pode usar o mesmo @.</div>
           <div class="lb-status" id="username-status" style="margin:2px 0 0;"></div>
         </div>
       </div>
@@ -2901,8 +2901,8 @@
     const raw = input.value.trim().toLowerCase();
     statusEl.classList.remove("error");
 
-    if (!/^[a-z0-9_]{3,18}$/.test(raw)){
-      statusEl.textContent = "Use de 3 a 18 letras minúsculas, números ou \"_\".";
+    if (!/^[a-z0-9_]{2,18}$/.test(raw)){
+      statusEl.textContent = "Use de 2 a 18 letras minúsculas, números ou \"_\".";
       statusEl.classList.add("error");
       return;
     }
