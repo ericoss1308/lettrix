@@ -2524,7 +2524,7 @@
       if (!document.getElementById("versus-join-screen").hidden){ document.getElementById("versus-join-back-btn").click(); return; }
       if (!document.getElementById("versus-screen").hidden){ document.getElementById("versus-menu-back-btn").click(); return; }
       if (!document.getElementById("play-mode-screen").hidden){ document.getElementById("mode-back-btn").click(); return; }
-      if (state === "playing") togglePause(true);
+      if (state === "playing" && !(versusState.active && versusState.ranked)) togglePause(true);
       else if (state === "paused") togglePause(false);
       return;
     }
@@ -3599,7 +3599,10 @@
   });
 
   document.addEventListener("visibilitychange", () => {
-    if (document.hidden && state === "playing") togglePause(true);
+    // No ranqueado não existe pausa: se a pessoa trocar de app ou bloquear a
+    // tela, a partida continua rodando (e o adversário some via presence,
+    // ver handleVersusAbandon) em vez de ficar esperando ela voltar.
+    if (document.hidden && state === "playing" && !(versusState.active && versusState.ranked)) togglePause(true);
   });
 
   /* ============================= 1v1 (MODO VERSUS) =============================
@@ -3622,7 +3625,8 @@
     myResult: null,
     oppResult: null,
     finished: false,
-    ranked: false            // true só quando a sala veio do matchmaking; salas por código nunca valem rank
+    ranked: false,           // true só quando a sala veio do matchmaking; salas por código nunca valem rank
+    abandonTimer: null       // timeout de segurança da tela "esperando o adversário terminar"
   };
 
   /* ============================= MATCHMAKING RANQUEADO ============================= */
@@ -3878,7 +3882,21 @@
 
     channel.on("presence", { event: "sync" }, () => {
       const hadOpponent = !!versusState.opponent;
-      versusState.opponent = versusFindOpponent();
+      const stillThere = versusFindOpponent();
+
+      // Se a partida já começou (ou eu já terminei e só estou esperando o
+      // resultado do outro lado) e o adversário sumiu da presença — fechou o
+      // navegador, o celular bloqueou a tela, caiu a conexão etc — não dá
+      // pra continuar esperando um "finish" que nunca vai chegar. Mantemos
+      // o último versusState.opponent conhecido (não zera pra null) porque
+      // ainda precisamos do id/nome dele pra registrar o resultado.
+      const matchInProgress = versusState.active || (!versusState.finished && versusState.myResult);
+      if (hadOpponent && !stillThere && matchInProgress){
+        handleVersusAbandon();
+        return;
+      }
+
+      versusState.opponent = stillThere;
       if (!hadOpponent && versusState.opponent && mmState.hosting){
         mmState.hosting = false;
         if (currentUser){
@@ -3901,6 +3919,11 @@
       }
     });
     channel.on("broadcast", { event: "leave" }, () => {
+      const matchInProgress = versusState.active || (!versusState.finished && versusState.myResult);
+      if (matchInProgress){
+        handleVersusAbandon();
+        return;
+      }
       versusState.opponent = null;
       if (!document.getElementById("versus-lobby-screen").hidden){
         renderVersusLobby();
@@ -3923,6 +3946,8 @@
   }
 
   function leaveVersusRoom(){
+    clearTimeout(versusState.abandonTimer);
+    versusState.abandonTimer = null;
     if (versusState.channel){
       try{ versusState.channel.send({ type: "broadcast", event: "leave", payload: {} }); }catch(e){}
       try{ versusState.channel.unsubscribe(); }catch(e){}
@@ -3997,17 +4022,29 @@
     } else {
       hideAllVersusScreens();
       document.getElementById("versus-waiting-screen").hidden = false;
+      // Rede de segurança: a detecção via presence (handleVersusAbandon) deve
+      // pegar a maioria dos casos, mas em celular o SO às vezes mantém a
+      // conexão "meio viva" por um tempo antes de soltar de vez ao bloquear a
+      // tela. Se depois de 45s ainda não chegou nem o resultado nem o sumiço,
+      // declara W.O. mesmo assim — ninguém deve ficar preso nessa tela.
+      clearTimeout(versusState.abandonTimer);
+      versusState.abandonTimer = setTimeout(() => {
+        if (!versusState.finished) handleVersusAbandon();
+      }, 45000);
     }
   }
 
   function handleVersusOpponentFinish(payload){
+    clearTimeout(versusState.abandonTimer);
+    versusState.abandonTimer = null;
     versusState.oppResult = payload;
     if (versusState.myResult){
       showVersusResults();
     }
   }
 
-  function showVersusResults(){
+  function showVersusResults(opts){
+    const abandoned = !!(opts && opts.abandoned);
     versusState.active = false;
     versusState.finished = true;
     const me = versusState.myResult, opp = versusState.oppResult;
@@ -4019,8 +4056,10 @@
     const oppInfo = versusState.opponent || { name: "Adversário", avatarUrl: null, avatarPos: null };
     renderVersusAvatar(document.getElementById("vr-opp-avatar"), oppInfo.name, oppInfo.avatarUrl, oppInfo.avatarPos);
     document.getElementById("vr-opp-name").textContent = oppInfo.name;
-    document.getElementById("vr-opp-score").textContent = opp.score;
-    document.getElementById("vr-opp-wave").textContent = "Onda " + opp.wave;
+    // Se o adversário sumiu (fechou o navegador, celular bloqueou etc) nunca
+    // recebemos o resultado dele — não inventa placar, só avisa que saiu.
+    document.getElementById("vr-opp-score").textContent = abandoned ? "—" : opp.score;
+    document.getElementById("vr-opp-wave").textContent = abandoned ? "Desconectou" : ("Onda " + opp.wave);
 
     const meCard = document.getElementById("vr-card-me");
     const oppCard = document.getElementById("vr-card-opp");
@@ -4030,15 +4069,17 @@
     meTag.textContent = ""; oppTag.textContent = "";
 
     // Vence quem for mais longe (maior onda); em empate de onda, decide a pontuação.
-    let meWins = me.wave !== opp.wave ? me.wave > opp.wave : me.score > opp.score;
-    let tie = me.wave === opp.wave && me.score === opp.score;
+    // Em caso de abandono, vitória automática por W.O. — não há placar do
+    // outro lado pra comparar.
+    let meWins = abandoned ? true : (me.wave !== opp.wave ? me.wave > opp.wave : me.score > opp.score);
+    let tie = abandoned ? false : (me.wave === opp.wave && me.score === opp.score);
 
     const title = document.getElementById("vr-title");
     if (tie){
       title.textContent = "EMPATE!";
     } else if (meWins){
-      meCard.classList.add("winner"); meTag.textContent = "Vencedor";
-      title.textContent = "VOCÊ VENCEU!";
+      meCard.classList.add("winner"); meTag.textContent = abandoned ? "Vitória por W.O." : "Vencedor";
+      title.textContent = abandoned ? "ADVERSÁRIO DESCONECTOU — VOCÊ VENCEU!" : "VOCÊ VENCEU!";
     } else {
       oppCard.classList.add("winner"); oppTag.textContent = "Vencedor";
       title.textContent = "VOCÊ PERDEU";
@@ -4063,6 +4104,22 @@
 
     hideAllVersusScreens();
     document.getElementById("versus-result-screen").hidden = false;
+  }
+
+  // Chamado quando a presença do adversário some no meio da partida (fechou
+  // o navegador, o celular bloqueou a tela, caiu a conexão) ou quando o
+  // temporizador de segurança da tela de espera estoura sem notícia dele.
+  // Declara vitória por W.O. em vez de deixar a pessoa presa esperando pra sempre.
+  function handleVersusAbandon(){
+    if (versusState.finished) return;
+    clearTimeout(versusState.abandonTimer);
+    versusState.abandonTimer = null;
+    if (!versusState.myResult){
+      // A partida ainda estava rolando quando o adversário sumiu — encerra
+      // com o que eu já tinha feito até aqui.
+      versusState.myResult = { score, wave, wordsDestroyed };
+    }
+    showVersusResults({ abandoned: true });
   }
 
   // Só o anfitrião chama, mesma lógica de "single writer" do ranqueado.
