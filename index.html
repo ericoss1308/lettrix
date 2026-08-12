@@ -1149,7 +1149,7 @@
       profileBox.hidden = false;
       formsBox.hidden = true;
       const email = currentUser.email || "";
-      const avatarUrl = currentUser.user_metadata && currentUser.user_metadata.avatar_url;
+      const avatarUrl = currentUser.user_metadata && currentUser.user_metadata.custom_avatar_url;
       const avatarImg = document.getElementById("profile-avatar-img");
       const avatarInitials = document.getElementById("profile-avatar-initials");
       const removeAvatarBtn = document.getElementById("remove-avatar-btn");
@@ -1313,7 +1313,7 @@
     if (uploadError) throw uploadError;
     const { data } = supabaseClient.storage.from(AVATAR_BUCKET).getPublicUrl(path);
     const publicUrl = data.publicUrl + "?t=" + Date.now();
-    const { error: updateError } = await supabaseClient.auth.updateUser({ data: { avatar_url: publicUrl, avatar_pos: avatarPos } });
+    const { error: updateError } = await supabaseClient.auth.updateUser({ data: { custom_avatar_url: publicUrl, avatar_pos: avatarPos } });
     if (updateError) throw updateError;
     const { data: userData } = await supabaseClient.auth.getUser();
     currentUser = userData.user;
@@ -1326,7 +1326,7 @@
       .from(AVATAR_BUCKET)
       .remove([`${currentUser.id}/avatar.jpg`, `${currentUser.id}/avatar.gif`])
       .catch(() => {});
-    const { error: updateError } = await supabaseClient.auth.updateUser({ data: { avatar_url: null, avatar_pos: null } });
+    const { error: updateError } = await supabaseClient.auth.updateUser({ data: { custom_avatar_url: null, avatar_pos: null } });
     if (updateError) throw updateError;
     const { data: userData } = await supabaseClient.auth.getUser();
     currentUser = userData.user;
@@ -2769,7 +2769,7 @@
     submitStatus.classList.remove("error");
     submitStatus.textContent = "";
     try{
-      const avatarUrl = currentUser.user_metadata ? currentUser.user_metadata.avatar_url : null;
+      const avatarUrl = currentUser.user_metadata ? currentUser.user_metadata.custom_avatar_url : null;
       const avatarPos = currentUser.user_metadata ? currentUser.user_metadata.avatar_pos : null;
       await submitScoreToLeaderboard(currentProfile.username, score, wave, currentLanguage, avatarUrl, avatarPos);
       submitStatus.textContent = "Pontuação enviada!";
@@ -3173,7 +3173,7 @@
     return typed || "Piloto";
   }
   function versusMyAvatar(){
-    const avatarUrl = currentUser && currentUser.user_metadata ? currentUser.user_metadata.avatar_url : null;
+    const avatarUrl = currentUser && currentUser.user_metadata ? currentUser.user_metadata.custom_avatar_url : null;
     const avatarPos = currentUser && currentUser.user_metadata ? currentUser.user_metadata.avatar_pos : null;
     return { avatarUrl: avatarUrl || null, avatarPos: avatarPos || null };
   }
