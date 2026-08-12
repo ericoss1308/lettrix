@@ -834,7 +834,7 @@
   <div class="overlay" id="versus-screen" hidden>
     <button type="button" class="corner-back-btn" id="versus-menu-back-btn" title="Voltar" aria-label="Voltar"><img src="" alt="" id="versus-menu-back-icon"></button>
     <h1 style="font-size:26px;letter-spacing:.24em;margin-bottom:6px;">MODO 1V1</h1>
-    <p class="tagline">Crie uma sala ou entre com um código. Os dois começam juntos e recebem as mesmas palavras — quem for mais longe, vence.</p>
+    <p class="tagline">Crie uma sala ou entre com um código. Os dois começam juntos e recebem as mesmas palavras e quem for mais longe, vence.</p>
     <div id="versus-name-box" style="width:100%;max-width:280px;box-sizing:border-box;margin-bottom:6px;">
       <input type="text" id="versus-name-input" placeholder="Seu nome de piloto" maxlength="18"
         style="font-family:var(--font);background:var(--steel);color:var(--white);border:1px solid var(--steel-line);border-radius:6px;padding:clamp(10px,2.4vw,14px) 14px;font-size:clamp(12px,2.4vw,15px);letter-spacing:.03em;width:100%;box-sizing:border-box;outline:none;">
@@ -3675,9 +3675,12 @@
     if (!mmState.active || !currentUser) return;
     const myId = currentUser.id;
     try{
+      const { data: sessionData } = await supabaseClient.auth.getSession();
+      const accessToken = sessionData.session && sessionData.session.access_token;
+      if (!accessToken) return;
       const url = `${SUPABASE_URL}/rest/v1/matchmaking_queue?select=*&order=created_at.asc`;
       const res = await fetch(url, {
-        headers: { "apikey": SUPABASE_ANON_KEY, "Authorization": `Bearer ${SUPABASE_ANON_KEY}` }
+        headers: { "apikey": SUPABASE_ANON_KEY, "Authorization": `Bearer ${accessToken}` }
       });
       if (!res.ok) return;
       const rows = await res.json();
