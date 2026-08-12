@@ -597,7 +597,6 @@
   .account-info-value{ font-size:12px; color:var(--white); text-align:right; }
   #profile-username-row{ align-items:flex-start; }
   #profile-username-box{ flex:1; min-width:0; }
-  .profile-username-display{ display:flex; align-items:center; justify-content:flex-end; gap:8px; }
 
   /* ---------- Tela de ajuste de enquadramento da foto (estilo Discord) ---------- */
   .crop-overlay{ padding:clamp(10px,3vw,24px); }
@@ -663,6 +662,7 @@
   .profile-provider{ font-size:11px; color:var(--mist); letter-spacing:.1em; text-transform:uppercase; margin-bottom:14px; }
 
   .profile-username-box{ width:100%; margin-bottom:20px; }
+  .profile-username-display[hidden], .profile-username-edit[hidden]{ display:none !important; }
   .profile-username-display:not([hidden]){
     display:flex; align-items:center; justify-content:center; gap:10px;
   }
