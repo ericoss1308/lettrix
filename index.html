@@ -3127,7 +3127,7 @@
     try{
       const avatarUrl = currentUser.user_metadata ? currentUser.user_metadata.custom_avatar_url : null;
       const avatarPos = currentUser.user_metadata ? currentUser.user_metadata.avatar_pos : null;
-      await submitScoreToLeaderboard(currentUser.id, currentProfile.username, score, wave, currentLanguage, avatarUrl, avatarPos);
+      await submitScoreToLeaderboard(currentUser.id, "@" + currentProfile.username, score, wave, currentLanguage, avatarUrl, avatarPos);
       submitStatus.textContent = "Pontuação enviada!";
       btn.innerHTML = `Enviado <img class="icon-img" src="${ICONS.check}" alt="">`;
     }catch(e){
