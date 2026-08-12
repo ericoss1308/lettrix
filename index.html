@@ -3972,6 +3972,7 @@
     versusState.myResult = null;
     versusState.oppResult = null;
     versusState.finished = false;
+    ackRankedMatch();
 
     hideAllVersusScreens();
     const cdScreen = document.getElementById("versus-countdown-screen");
@@ -4088,7 +4089,12 @@
     const matchResult = tie ? "tie" : (meWins ? "win" : "loss");
     document.getElementById("vr-ranked-info").hidden = true;
     if (versusState.ranked){
-      if (!tie && versusState.opponent){
+      // Em jogo normal só o host reporta, pra não terem os dois relatando ao
+      // mesmo tempo. Em abandono, quem sobrou reporta mesmo sem ser host —
+      // é justamente pra cobrir o caso de o host ser quem desconectou. O
+      // servidor (submit_ranked_match) só aceita uma vez por sala de
+      // qualquer forma, então não tem risco de duplicar.
+      if (!tie && versusState.opponent && (versusState.isHost || abandoned)){
         submitRankedResult(meWins); // essa função também loga o histórico com o delta de MMR
       } else if (tie){
         logMatchHistory("ranked", "tie", me.score, me.wave, oppInfo.name, 0);
@@ -4162,8 +4168,32 @@
 
   // Só o anfitrião chama o RPC (evita gravar o mesmo resultado duas vezes);
   // o adversário recebe o resultado via broadcast e só exibe.
+  // "Aperto de mão": registra no banco, com a própria sessão autenticada,
+  // que eu vou jogar contra este adversário nesta sala. O servidor só
+  // aceita o resultado final se existir esse registro dos DOIS lados —
+  // impede alguém de reportar vitória/derrota contra uma conta que nunca
+  // esteve realmente na sala.
+  async function ackRankedMatch(){
+    if (!versusState.ranked || !currentUser || !versusState.opponent || !supabaseClient) return;
+    try{
+      await supabaseClient.from("ranked_match_acks").insert({
+        room_code: versusState.code,
+        user_id: currentUser.id,
+        opponent_id: versusState.opponent.id
+      });
+    }catch(e){
+      // Se falhar (ex: já tinha sido enviado), não é grave por si só —
+      // só vai impedir o envio do resultado lá na frente, e nesse caso o
+      // erro aparece pro jogador do jeito normal (submitRankedResult falha).
+    }
+  }
+
+  // Pode ser chamada tanto pelo host quanto pelo adversário: em jogo
+  // normal só o host reporta (evita os dois tentarem ao mesmo tempo); em
+  // caso de abandono, quem sobrou reporta, seja host ou não — o servidor
+  // (submit_ranked_match) só aceita a primeira chamada válida por sala.
   async function submitRankedResult(meWins){
-    if (!versusState.isHost || !currentUser || !versusState.opponent) return;
+    if (!currentUser || !versusState.opponent) return;
     const winner = meWins
       ? { id: currentUser.id, name: versusState.me.name, avatarUrl: versusState.me.avatarUrl, avatarPos: versusState.me.avatarPos }
       : { id: versusState.opponent.id, name: versusState.opponent.name, avatarUrl: versusState.opponent.avatarUrl, avatarPos: versusState.opponent.avatarPos };
@@ -4183,6 +4213,7 @@
           "Prefer": "return=representation"
         },
         body: JSON.stringify({
+          p_room_code: versusState.code,
           p_winner_id: winner.id, p_winner_name: winner.name,
           p_winner_avatar_url: winner.avatarUrl, p_winner_avatar_pos: winner.avatarPos,
           p_loser_id: loser.id, p_loser_name: loser.name,
