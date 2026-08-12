@@ -866,7 +866,7 @@
   <div class="overlay" id="versus-lobby-screen" hidden>
     <div class="eyebrow">Sala de duelo</div>
     <h1 style="font-size:22px;letter-spacing:.2em;margin-bottom:10px;">AGUARDANDO</h1>
-    <div class="versus-code-box">
+    <div class="versus-code-box" id="versus-lobby-code-box">
       <div class="versus-code-label">Código da sala</div>
       <div class="versus-code-value" id="versus-lobby-code">-----</div>
     </div>
@@ -3781,6 +3781,12 @@
   }
 
   function renderVersusLobby(){
+    // No ranqueado o código não aparece pra ninguém — só é usado
+    // internamente pelo Realtime pra conectar os dois. Mostrar o código
+    // deixaria alguém compartilhar com um parceiro e "escolher" o
+    // adversário em vez de deixar o matchmaking decidir, manipulando MMR.
+    const codeBox = document.getElementById("versus-lobby-code-box");
+    codeBox.hidden = !!versusState.ranked;
     document.getElementById("versus-lobby-code").textContent = versusState.code || "-----";
     renderVersusAvatar(
       document.getElementById("versus-lobby-me-avatar"),
@@ -3812,7 +3818,9 @@
       document.getElementById("versus-lobby-opp-name").textContent = "Aguardando…";
       startBtn.hidden = !versusState.isHost;
       startBtn.disabled = true;
-      statusEl.textContent = "Compartilhe o código com seu adversário.";
+      statusEl.textContent = versusState.ranked
+        ? "Aguardando o adversário conectar…"
+        : "Compartilhe o código com seu adversário.";
     }
   }
 
