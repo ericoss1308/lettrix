@@ -1005,19 +1005,18 @@
     return res.json();
   }
 
-  async function submitScoreToLeaderboard(name, score, wave, lang, avatarUrl, avatarPos){
+  async function submitScoreToLeaderboard(userId, name, score, wave, lang, avatarUrl, avatarPos){
     if (!supabaseConfigured || !supabaseClient) throw new Error("not-configured");
     const { data: sessionData } = await supabaseClient.auth.getSession();
     const accessToken = sessionData.session && sessionData.session.access_token;
     if (!accessToken) throw new Error("not-authenticated");
 
-    // Antes isso era um POST simples, então cada partida virava uma linha nova
-    // e o mesmo @ podia aparecer várias vezes no ranking. Agora fazemos um
-    // upsert por "name" (o @): se a pontuação nova for maior que a salva, ela
-    // substitui; senão, mantemos a que já estava lá. Requer:
-    //   1) uma constraint UNIQUE na coluna "name" da tabela "scores"
-    //   2) a função SQL bump_score() (ver README/instruções) pra só atualizar
-    //      quando a pontuação nova for maior.
+    // Upsert por "user_id" (a conta): assim, trocar o @ ou a foto sempre
+    // reflete no ranking no próximo envio, mesmo que a pontuação não seja
+    // um novo recorde. A pontuação/onda/idioma só são sobrescritos quando
+    // o novo valor for maior que o recorde salvo. Requer:
+    //   1) uma coluna "user_id" (uuid) e constraint UNIQUE nela na tabela "scores"
+    //   2) a função SQL bump_score() (ver README/instruções) correspondente.
     const url = `${SUPABASE_URL}/rest/v1/rpc/bump_score`;
     const res = await fetch(url, {
       method: "POST",
@@ -1027,6 +1026,7 @@
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
+        p_user_id: userId,
         p_name: name.slice(0,18),
         p_score: score,
         p_wave: wave,
@@ -2771,7 +2771,7 @@
     try{
       const avatarUrl = currentUser.user_metadata ? currentUser.user_metadata.custom_avatar_url : null;
       const avatarPos = currentUser.user_metadata ? currentUser.user_metadata.avatar_pos : null;
-      await submitScoreToLeaderboard(currentProfile.username, score, wave, currentLanguage, avatarUrl, avatarPos);
+      await submitScoreToLeaderboard(currentUser.id, currentProfile.username, score, wave, currentLanguage, avatarUrl, avatarPos);
       submitStatus.textContent = "Pontuação enviada!";
       btn.innerHTML = `Enviado <img class="icon-img" src="${ICONS.check}" alt="">`;
     }catch(e){
