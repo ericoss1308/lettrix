@@ -572,6 +572,12 @@
   .avatar-dropdown button#avatar-menu-remove{ color:var(--alert); }
   .avatar-dropdown button#avatar-menu-remove:hover{ background:rgba(255,90,90,.12); color:var(--alert); }
   .avatar-dropdown[hidden]{ display:none !important; }
+  .profile-elo-card{ margin:-2px 0 14px; }
+  .profile-elo-badge{
+    display:inline-flex; align-items:center; gap:6px;
+    font-size:12px; font-weight:800; letter-spacing:.08em; text-transform:uppercase;
+    padding:7px 16px; border-radius:20px; font-family:var(--font);
+  }
 
   /* ---------- Cartão de informações da conta ---------- */
   .account-info-card{
@@ -806,8 +812,8 @@
     <button type="button" class="corner-back-btn" id="mode-back-btn" title="Voltar" aria-label="Voltar"><img src="" alt="" id="mode-back-icon"></button>
     <h1 style="font-size:22px;letter-spacing:.2em;margin-bottom:18px;">ESCOLHA O MODO</h1>
     <button class="btn" id="mode-solo-btn">Modo Solo</button>
-    <button class="btn secondary" id="mode-ranked-btn" style="border-color:var(--signal);color:var(--signal);"><img class="icon-img" id="mode-ranked-icon" src="" alt=""> Ranqueado</button>
-    <button class="btn secondary" id="mode-friends-btn"><img class="icon-img" id="mode-friends-icon" src="" alt=""> 1v1 (com amigos)</button>
+    <button class="btn secondary" id="mode-ranked-btn" style="border-color:var(--signal);color:var(--signal);">Ranqueado</button>
+    <button class="btn secondary" id="mode-friends-btn">1v1</button>
     <div class="lb-status" id="play-mode-status"></div>
   </div>
 
@@ -950,6 +956,7 @@
           <button type="button" id="avatar-menu-remove" hidden>Remover avatar</button>
         </div>
       </div>
+      <div class="profile-elo-card" id="profile-elo-card" hidden></div>
       <input type="file" id="avatar-input" accept="image/*,.gif" hidden>
       <button type="button" class="btn secondary" id="remove-avatar-btn" hidden style="display:none;">Remover foto</button>
 
@@ -1142,8 +1149,6 @@
     pencil: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAADyUlEQVR4nO3cwYoUVxSH8ds97SpoogSCWYUIAVeSiSaBLEPIC4iE7MS1MG+gO5dCIGQhuBTiE4j4ACEgJCtxkWWEhGgghITozHwu+hR1p5yMM91V3bdvf79Nt21ZNfi/de450z2TkiRJkiRJkiRJkiRJkiRJkiRJkiStPWAMjJb9dWgJgHH23EWwToBJPG4C78bz8cH/SlXIwj8P/AP8BJyM11wENcvCvwA8o/Wji6By/xP+DvDCRVC5A8JvuAhqdYjwXQS1OkL4LoLazBC+i6AWc4TvIlh1PYTvIlhVPYbvIlg1wEY89hW+i2BVNIEAH/ccvougdMRbusA7wG8R1HaP4e+3CN6Ka/su4rLRlv77naCG0Jz7IfAe04W3sEVgyekAJqPRaAfYSil9kVLaTilNBrxkk8HZlNLb8dwqsAzZnf8h05K/DewOePc3PcUz4KO4tjflMkTp3QCOAz93Aho6/AvxNWws+/9hbdHO+99GMEPu+/uFP+Q2o4PQlv6Lhr9m2Dvy/c50zx+q9Bt+aXh15Bti3jf8EtHu+1sRzlCl3/BLw+JGPsMvDYsb+Qy/RCxm5Gt6CcMvCYsZ+ZpzGn5JaEe+MxHOLv3u+7tZ+E8MvzDAJBbAgwipz5EvP9f3wOm4pt/eLQHtvn8tQuqz9Dfn+gu4ml3T8EtA++meT4Hn9Dfy7dB2+j8Am3GdDfxgRxmYlvwx8AbwSxbcvPIKcpO2wrjflyQL5naENe++3230vsyu5Xv5JaEd+S7tc9fOotvoNb8IYoIlvyzsHfmeMv++b6O3Suhv5LPRWzX0N/Lli+YmNnrlo5+Rr9voXeqeXwWin5EvP/4e7Xf0bPRKx/wj34vscat7XhWM+Ua+3WyxPAQ+iXONseSXj/lGvrxKfAMcj3N6168KZhv58kbvV/Y2es72q4LZRj4bvRow28hno1cDjj7y2ejVhKONfDZ6NeHwI5+NXm04/Mhno1cjDjfy2ejViNePfDZ6teL1I5+NXq1of5bvFK+OfDZ6tctK/91O6bfRqx3tyHe5E/529uet7HhLfi2yff994G/az+c14T8GPmuOtdGrSLbvH2P6YUyA/7KSfwt4M471rq9Ntu9fj8D/jcc/gK+y42z0apPt+59HuW/2/XvAB80xNnoV6ox8jyP458D17BhLfq2y0n8nwn9ko7cmstJ/JcL/DjgRr3nX1ywb+TaBP4Gvs7+z0atZ7Puj2PdvAOfidRu9ddCEzPT39vnzd+vORk+SJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSUkrpJVbNmmLEMEgLAAAAAElFTkSuQmCC"
   };
   document.getElementById("account-start-icon").src = ICONS.person;
-  document.getElementById("mode-ranked-icon").src = ICONS.trophy;
-  document.getElementById("mode-friends-icon").src = ICONS.swords;
   ["mode-back-icon","ranking-close-icon","versus-menu-back-icon","versus-join-back-icon","account-close-icon","history-close-icon"]
     .forEach(id => { document.getElementById(id).src = ICONS.back; });
 
@@ -1175,6 +1180,14 @@
   function tierBadgeHTML(mmr){
     const t = tierForMmr(mmr);
     return `<span class="tier-badge" style="background:${t.color}22;color:${t.color};border:1px solid ${t.color}66;">${t.name} · ${mmr}</span>`;
+  }
+  function renderProfileEloCard(mmr){
+    const card = document.getElementById("profile-elo-card");
+    if (!card) return;
+    if (mmr == null){ card.hidden = true; card.innerHTML = ""; return; }
+    const t = tierForMmr(mmr);
+    card.hidden = false;
+    card.innerHTML = `<span class="profile-elo-badge" style="background:${t.color}22;color:${t.color};border:1px solid ${t.color}66;">${t.name} · ${mmr}</span>`;
   }
 
   const supabaseConfigured =
@@ -1484,6 +1497,11 @@
         : "Conta por e-mail";
       document.getElementById("profile-provider").textContent = providerLabel;
 
+      renderProfileEloCard(null);
+      fetchMyRankedStats().then(stats => {
+        if (currentUser) renderProfileEloCard(stats.mmr);
+      });
+
       const usernameDisplay = document.getElementById("profile-username-display");
       const usernameEdit = document.getElementById("profile-username-edit");
       const usernameText = document.getElementById("profile-username-text");
@@ -1512,6 +1530,7 @@
     }else{
       profileBox.hidden = true;
       formsBox.hidden = false;
+      renderProfileEloCard(null);
       if (accountLabel) accountLabel.textContent = "Minha conta";
     }
   }
