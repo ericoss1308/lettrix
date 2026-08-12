@@ -550,10 +550,12 @@
     width:28px; height:28px; border-radius:50%;
     background:var(--void); border:2px solid var(--void-2);
     display:flex; align-items:center; justify-content:center;
-    cursor:none; transition:background .15s ease, transform .15s ease;
+    cursor:none; transition:background .15s ease, transform .15s ease, box-shadow .15s ease;
+    box-shadow:0 2px 8px rgba(0,0,0,.35);
   }
-  .avatar-edit-badge:hover{ background:var(--signal); transform:scale(1.08); }
-  .avatar-edit-badge img{ width:12px; height:12px; opacity:.9; }
+  .avatar-edit-badge:hover{ background:var(--signal); transform:scale(1.08); box-shadow:0 2px 10px var(--signal-soft); }
+  .avatar-edit-badge svg{ width:14px; height:14px; stroke:var(--mist); transition:stroke .15s ease; }
+  .avatar-edit-badge:hover svg{ stroke:#03110d; }
   .avatar-dropdown{
     position:absolute; top:calc(100% + 8px); left:50%; transform:translateX(-50%);
     background:var(--steel); border:1px solid var(--steel-line); border-radius:8px;
@@ -569,6 +571,7 @@
   .avatar-dropdown button:hover{ background:var(--steel-2); color:var(--signal); }
   .avatar-dropdown button#avatar-menu-remove{ color:var(--alert); }
   .avatar-dropdown button#avatar-menu-remove:hover{ background:rgba(255,90,90,.12); color:var(--alert); }
+  .avatar-dropdown[hidden]{ display:none; }
 
   /* ---------- Cartão de informações da conta ---------- */
   .account-info-card{
@@ -936,7 +939,12 @@
           <img id="profile-avatar-img" alt="" hidden>
           <span id="profile-avatar-initials">?</span>
         </button>
-        <span class="avatar-edit-badge" id="avatar-edit-badge"><img src="" alt="" id="avatar-edit-icon"></span>
+        <span class="avatar-edit-badge" id="avatar-edit-badge" title="Mudar avatar">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 20h9"/>
+            <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/>
+          </svg>
+        </span>
         <div class="avatar-dropdown" id="avatar-dropdown" hidden>
           <button type="button" id="avatar-menu-change">Mudar avatar</button>
           <button type="button" id="avatar-menu-remove" hidden>Remover avatar</button>
@@ -973,7 +981,7 @@
         </div>
       </div>
 
-      <button class="btn secondary" id="account-history-btn"><img class="icon-img" id="account-history-icon" src="" alt=""> Histórico de partidas</button>
+      <button class="btn secondary" id="account-history-btn" style="white-space:nowrap;">Histórico</button>
       <button class="btn secondary" id="account-logout-btn">Sair da conta</button>
     </div>
 
@@ -1136,10 +1144,8 @@
   document.getElementById("account-start-icon").src = ICONS.person;
   document.getElementById("mode-ranked-icon").src = ICONS.trophy;
   document.getElementById("mode-friends-icon").src = ICONS.swords;
-  document.getElementById("account-history-icon").src = ICONS.history;
   ["mode-back-icon","ranking-close-icon","versus-menu-back-icon","versus-join-back-icon","account-close-icon","history-close-icon"]
     .forEach(id => { document.getElementById(id).src = ICONS.back; });
-  document.getElementById("avatar-edit-icon").src = ICONS.pencil;
 
   /* ============================= RANKING GLOBAL (Supabase) =============================
      Preencha os dois valores abaixo com os dados do SEU projeto Supabase
