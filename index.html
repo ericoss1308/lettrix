@@ -2524,7 +2524,7 @@
       if (!document.getElementById("versus-join-screen").hidden){ document.getElementById("versus-join-back-btn").click(); return; }
       if (!document.getElementById("versus-screen").hidden){ document.getElementById("versus-menu-back-btn").click(); return; }
       if (!document.getElementById("play-mode-screen").hidden){ document.getElementById("mode-back-btn").click(); return; }
-      if (state === "playing") togglePause(true);
+      if (state === "playing" && !(versusState.active && versusState.ranked)) togglePause(true);
       else if (state === "paused") togglePause(false);
       return;
     }
@@ -3599,7 +3599,10 @@
   });
 
   document.addEventListener("visibilitychange", () => {
-    if (document.hidden && state === "playing") togglePause(true);
+    // No ranqueado não existe pausa: se a pessoa trocar de app ou bloquear a
+    // tela, a partida continua rodando (e o adversário some via presence,
+    // ver handleVersusAbandon) em vez de ficar esperando ela voltar.
+    if (document.hidden && state === "playing" && !(versusState.active && versusState.ranked)) togglePause(true);
   });
 
   /* ============================= 1v1 (MODO VERSUS) =============================
@@ -3622,7 +3625,8 @@
     myResult: null,
     oppResult: null,
     finished: false,
-    ranked: false            // true só quando a sala veio do matchmaking; salas por código nunca valem rank
+    ranked: false,           // true só quando a sala veio do matchmaking; salas por código nunca valem rank
+    abandonTimer: null       // timeout de segurança da tela "esperando o adversário terminar"
   };
 
   /* ============================= MATCHMAKING RANQUEADO ============================= */
@@ -3878,7 +3882,21 @@
 
     channel.on("presence", { event: "sync" }, () => {
       const hadOpponent = !!versusState.opponent;
-      versusState.opponent = versusFindOpponent();
+      const stillThere = versusFindOpponent();
+
+      // Se a partida já começou (ou eu já terminei e só estou esperando o
+      // resultado do outro lado) e o adversário sumiu da presença — fechou o
+      // navegador, o celular bloqueou a tela, caiu a conexão etc — não dá
+      // pra continuar esperando um "finish" que nunca vai chegar. Mantemos
+      // o último versusState.opponent conhecido (não zera pra null) porque
+      // ainda precisamos do id/nome dele pra registrar o resultado.
+      const matchInProgress = versusState.active || (!versusState.finished && versusState.myResult);
+      if (hadOpponent && !stillThere && matchInProgress){
+        handleVersusAbandon();
+        return;
+      }
+
+      versusState.opponent = stillThere;
       if (!hadOpponent && versusState.opponent && mmState.hosting){
         mmState.hosting = false;
         if (currentUser){
@@ -3901,6 +3919,11 @@
       }
     });
     channel.on("broadcast", { event: "leave" }, () => {
+      const matchInProgress = versusState.active || (!versusState.finished && versusState.myResult);
+      if (matchInProgress){
+        handleVersusAbandon();
+        return;
+      }
       versusState.opponent = null;
       if (!document.getElementById("versus-lobby-screen").hidden){
         renderVersusLobby();
@@ -3923,6 +3946,8 @@
   }
 
   function leaveVersusRoom(){
+    clearTimeout(versusState.abandonTimer);
+    versusState.abandonTimer = null;
     if (versusState.channel){
       try{ versusState.channel.send({ type: "broadcast", event: "leave", payload: {} }); }catch(e){}
       try{ versusState.channel.unsubscribe(); }catch(e){}
@@ -3947,6 +3972,7 @@
     versusState.myResult = null;
     versusState.oppResult = null;
     versusState.finished = false;
+    ackRankedMatch();
 
     hideAllVersusScreens();
     const cdScreen = document.getElementById("versus-countdown-screen");
@@ -3997,17 +4023,29 @@
     } else {
       hideAllVersusScreens();
       document.getElementById("versus-waiting-screen").hidden = false;
+      // Rede de segurança: a detecção via presence (handleVersusAbandon) deve
+      // pegar a maioria dos casos, mas em celular o SO às vezes mantém a
+      // conexão "meio viva" por um tempo antes de soltar de vez ao bloquear a
+      // tela. Se depois de 45s ainda não chegou nem o resultado nem o sumiço,
+      // declara W.O. mesmo assim — ninguém deve ficar preso nessa tela.
+      clearTimeout(versusState.abandonTimer);
+      versusState.abandonTimer = setTimeout(() => {
+        if (!versusState.finished) handleVersusAbandon();
+      }, 45000);
     }
   }
 
   function handleVersusOpponentFinish(payload){
+    clearTimeout(versusState.abandonTimer);
+    versusState.abandonTimer = null;
     versusState.oppResult = payload;
     if (versusState.myResult){
       showVersusResults();
     }
   }
 
-  function showVersusResults(){
+  function showVersusResults(opts){
+    const abandoned = !!(opts && opts.abandoned);
     versusState.active = false;
     versusState.finished = true;
     const me = versusState.myResult, opp = versusState.oppResult;
@@ -4019,8 +4057,10 @@
     const oppInfo = versusState.opponent || { name: "Adversário", avatarUrl: null, avatarPos: null };
     renderVersusAvatar(document.getElementById("vr-opp-avatar"), oppInfo.name, oppInfo.avatarUrl, oppInfo.avatarPos);
     document.getElementById("vr-opp-name").textContent = oppInfo.name;
-    document.getElementById("vr-opp-score").textContent = opp.score;
-    document.getElementById("vr-opp-wave").textContent = "Onda " + opp.wave;
+    // Se o adversário sumiu (fechou o navegador, celular bloqueou etc) nunca
+    // recebemos o resultado dele — não inventa placar, só avisa que saiu.
+    document.getElementById("vr-opp-score").textContent = abandoned ? "—" : opp.score;
+    document.getElementById("vr-opp-wave").textContent = abandoned ? "Desconectou" : ("Onda " + opp.wave);
 
     const meCard = document.getElementById("vr-card-me");
     const oppCard = document.getElementById("vr-card-opp");
@@ -4030,15 +4070,17 @@
     meTag.textContent = ""; oppTag.textContent = "";
 
     // Vence quem for mais longe (maior onda); em empate de onda, decide a pontuação.
-    let meWins = me.wave !== opp.wave ? me.wave > opp.wave : me.score > opp.score;
-    let tie = me.wave === opp.wave && me.score === opp.score;
+    // Em caso de abandono, vitória automática por W.O. — não há placar do
+    // outro lado pra comparar.
+    let meWins = abandoned ? true : (me.wave !== opp.wave ? me.wave > opp.wave : me.score > opp.score);
+    let tie = abandoned ? false : (me.wave === opp.wave && me.score === opp.score);
 
     const title = document.getElementById("vr-title");
     if (tie){
       title.textContent = "EMPATE!";
     } else if (meWins){
-      meCard.classList.add("winner"); meTag.textContent = "Vencedor";
-      title.textContent = "VOCÊ VENCEU!";
+      meCard.classList.add("winner"); meTag.textContent = abandoned ? "Vitória por W.O." : "Vencedor";
+      title.textContent = abandoned ? "ADVERSÁRIO DESCONECTOU — VOCÊ VENCEU!" : "VOCÊ VENCEU!";
     } else {
       oppCard.classList.add("winner"); oppTag.textContent = "Vencedor";
       title.textContent = "VOCÊ PERDEU";
@@ -4047,7 +4089,12 @@
     const matchResult = tie ? "tie" : (meWins ? "win" : "loss");
     document.getElementById("vr-ranked-info").hidden = true;
     if (versusState.ranked){
-      if (!tie && versusState.opponent){
+      // Em jogo normal só o host reporta, pra não terem os dois relatando ao
+      // mesmo tempo. Em abandono, quem sobrou reporta mesmo sem ser host —
+      // é justamente pra cobrir o caso de o host ser quem desconectou. O
+      // servidor (submit_ranked_match) só aceita uma vez por sala de
+      // qualquer forma, então não tem risco de duplicar.
+      if (!tie && versusState.opponent && (versusState.isHost || abandoned)){
         submitRankedResult(meWins); // essa função também loga o histórico com o delta de MMR
       } else if (tie){
         logMatchHistory("ranked", "tie", me.score, me.wave, oppInfo.name, 0);
@@ -4063,6 +4110,22 @@
 
     hideAllVersusScreens();
     document.getElementById("versus-result-screen").hidden = false;
+  }
+
+  // Chamado quando a presença do adversário some no meio da partida (fechou
+  // o navegador, o celular bloqueou a tela, caiu a conexão) ou quando o
+  // temporizador de segurança da tela de espera estoura sem notícia dele.
+  // Declara vitória por W.O. em vez de deixar a pessoa presa esperando pra sempre.
+  function handleVersusAbandon(){
+    if (versusState.finished) return;
+    clearTimeout(versusState.abandonTimer);
+    versusState.abandonTimer = null;
+    if (!versusState.myResult){
+      // A partida ainda estava rolando quando o adversário sumiu — encerra
+      // com o que eu já tinha feito até aqui.
+      versusState.myResult = { score, wave, wordsDestroyed };
+    }
+    showVersusResults({ abandoned: true });
   }
 
   // Só o anfitrião chama, mesma lógica de "single writer" do ranqueado.
@@ -4105,8 +4168,32 @@
 
   // Só o anfitrião chama o RPC (evita gravar o mesmo resultado duas vezes);
   // o adversário recebe o resultado via broadcast e só exibe.
+  // "Aperto de mão": registra no banco, com a própria sessão autenticada,
+  // que eu vou jogar contra este adversário nesta sala. O servidor só
+  // aceita o resultado final se existir esse registro dos DOIS lados —
+  // impede alguém de reportar vitória/derrota contra uma conta que nunca
+  // esteve realmente na sala.
+  async function ackRankedMatch(){
+    if (!versusState.ranked || !currentUser || !versusState.opponent || !supabaseClient) return;
+    try{
+      await supabaseClient.from("ranked_match_acks").insert({
+        room_code: versusState.code,
+        user_id: currentUser.id,
+        opponent_id: versusState.opponent.id
+      });
+    }catch(e){
+      // Se falhar (ex: já tinha sido enviado), não é grave por si só —
+      // só vai impedir o envio do resultado lá na frente, e nesse caso o
+      // erro aparece pro jogador do jeito normal (submitRankedResult falha).
+    }
+  }
+
+  // Pode ser chamada tanto pelo host quanto pelo adversário: em jogo
+  // normal só o host reporta (evita os dois tentarem ao mesmo tempo); em
+  // caso de abandono, quem sobrou reporta, seja host ou não — o servidor
+  // (submit_ranked_match) só aceita a primeira chamada válida por sala.
   async function submitRankedResult(meWins){
-    if (!versusState.isHost || !currentUser || !versusState.opponent) return;
+    if (!currentUser || !versusState.opponent) return;
     const winner = meWins
       ? { id: currentUser.id, name: versusState.me.name, avatarUrl: versusState.me.avatarUrl, avatarPos: versusState.me.avatarPos }
       : { id: versusState.opponent.id, name: versusState.opponent.name, avatarUrl: versusState.opponent.avatarUrl, avatarPos: versusState.opponent.avatarPos };
@@ -4126,6 +4213,7 @@
           "Prefer": "return=representation"
         },
         body: JSON.stringify({
+          p_room_code: versusState.code,
           p_winner_id: winner.id, p_winner_name: winner.name,
           p_winner_avatar_url: winner.avatarUrl, p_winner_avatar_pos: winner.avatarPos,
           p_loser_id: loser.id, p_loser_name: loser.name,
