@@ -398,8 +398,11 @@
     background:var(--steel); border:1px solid var(--steel-line); border-radius:6px;
     padding:9px 12px; text-align:left;
   }
-  .hist-row .hist-mode{ font-size:10px; color:var(--mist); letter-spacing:.04em; width:76px; flex-shrink:0; }
-  .hist-row .hist-detail{ flex:1; min-width:0; font-size:12px; color:var(--white); }
+  .hist-row .hist-mode{ font-size:10px; color:var(--mist); letter-spacing:.04em; width:60px; flex-shrink:0; }
+  .hist-row .hist-detail{
+    flex:1; min-width:0; font-size:12px; color:var(--white);
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
   .hist-row .hist-result{ font-weight:800; font-size:12px; flex-shrink:0; }
   .hist-row .hist-result.win{ color:#5fe0c4; }
   .hist-row .hist-result.loss{ color:var(--alert); }
@@ -755,6 +758,17 @@
     filter:drop-shadow(0 0 6px var(--signal-soft));
   }
   #theme-cursor.clicking svg{ transform:scale(.82); transition:transform .08s ease, color .8s ease; }
+  /* Quando o ponteiro está sobre um elemento que usa a mesma cor do tema
+     (botões azuis, abas ativas etc.), o cursor trocaria pra uma cor igual
+     à do fundo e ficaria "invisível". Nesses casos, usamos uma cor de alto
+     contraste (a mesma dos textos escuros sobre fundo azul) e uma transição
+     mais rápida, já que aqui é sobre a resposta imediata ao hover, não sobre
+     a mudança gradual de tema por pontuação. */
+  #theme-cursor.on-signal svg{
+    color:#03110d;
+    transition:color .12s ease;
+    filter:drop-shadow(0 0 5px rgba(255,255,255,.5));
+  }
   @media (hover:none), (pointer:coarse){
     /* Telas de toque não têm cursor de mouse — volta ao padrão do sistema */
     html, body, input, textarea, select, button, a, [role="button"], .btn, .lb-tab, label{ cursor:auto !important; }
@@ -4227,10 +4241,28 @@
     const cursorEl = document.getElementById("theme-cursor");
     if (!cursorEl) return;
     let visible = false;
+
+    // Elementos que ficam com fundo (ou texto) na mesma cor do tema (--signal),
+    // onde o cursor azul-sobre-azul ficaria difícil de enxergar. Ao passar por
+    // cima deles, o cursor troca pra uma cor de alto contraste (ver CSS acima).
+    const SIGNAL_HOVER_SELECTOR = [
+      ".btn:not(.secondary)",
+      ".segmented button.active",
+      ".lb-tab.active",
+      ".avatar-edit-badge"
+    ].join(", ");
+
+    function updateSignalState(clientX, clientY){
+      const target = document.elementFromPoint(clientX, clientY);
+      const onSignal = !!(target && target.closest && target.closest(SIGNAL_HOVER_SELECTOR));
+      cursorEl.classList.toggle("on-signal", onSignal);
+    }
+
     window.addEventListener("mousemove", (e) => {
       if (!visible){ visible = true; }
       // -11/-4 centraliza a "ponta" (agora apontando pra cima) aproximadamente no ponteiro real
       cursorEl.style.transform = `translate(${e.clientX - 11}px, ${e.clientY - 4}px)`;
+      updateSignalState(e.clientX, e.clientY);
     }, { passive: true });
     window.addEventListener("mousedown", () => cursorEl.classList.add("clicking"));
     window.addEventListener("mouseup", () => cursorEl.classList.remove("clicking"));
