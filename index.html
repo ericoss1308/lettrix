@@ -373,6 +373,29 @@
   .lb-status:empty{ margin:0; }
   .lb-status.error{ color:var(--alert); }
 
+  .lb-tabs{ display:flex; gap:8px; margin-bottom:14px; }
+  .lb-tab{
+    font-family:var(--font); background:var(--steel); color:var(--mist); border:1px solid var(--steel-line);
+    border-radius:6px; padding:8px 18px; font-size:12px; letter-spacing:.08em; cursor:pointer;
+  }
+  .lb-tab.active{ background:var(--signal-soft); color:var(--signal); border-color:var(--signal); }
+
+  .tier-badge{
+    display:inline-flex; align-items:center; gap:4px; font-size:10px; font-weight:800;
+    letter-spacing:.05em; padding:2px 8px; border-radius:10px; flex-shrink:0;
+  }
+  .hist-row{
+    display:flex; align-items:center; gap:10px;
+    background:var(--steel); border:1px solid var(--steel-line); border-radius:6px;
+    padding:9px 12px; text-align:left;
+  }
+  .hist-row .hist-mode{ font-size:10px; color:var(--mist); letter-spacing:.04em; width:76px; flex-shrink:0; }
+  .hist-row .hist-detail{ flex:1; min-width:0; font-size:12px; color:var(--white); }
+  .hist-row .hist-result{ font-weight:800; font-size:12px; flex-shrink:0; }
+  .hist-row .hist-result.win{ color:#5fe0c4; }
+  .hist-row .hist-result.loss{ color:var(--alert); }
+  .hist-row .hist-result.tie{ color:var(--mist); }
+
   .score-submit{
     width:min(100%, 340px); display:flex; flex-direction:column; gap:10px; margin:4px 0 18px;
   }
@@ -648,9 +671,40 @@
     .life-icon{ width:clamp(13px,3.4vw,17px); height:clamp(13px,3.4vw,17px); }
     #prompt-bar{ font-size:clamp(15px,4.6vw,20px); padding:clamp(7px,2vw,10px) clamp(14px,4vw,22px); }
   }
+
+  /* Cursor temático: acompanha a mesma cor de fase do jogo (--signal), com
+     transição suave. Cursores nativos do SO não sabem fazer transição de
+     cor sozinhos, então escondemos o cursor padrão e desenhamos o nosso
+     via um elemento que segue o mouse. */
+  html, body{ cursor:none; }
+  input, textarea, select, button, a, [role="button"], .btn, .lb-tab, label{ cursor:none; }
+  #theme-cursor{
+    position:fixed; top:0; left:0; width:22px; height:22px;
+    pointer-events:none; z-index:99999;
+    transform:translate(-999px,-999px);
+    will-change:transform;
+  }
+  #theme-cursor svg{
+    width:100%; height:100%;
+    color:var(--signal);
+    transition:color .8s ease;
+    filter:drop-shadow(0 0 6px var(--signal-soft));
+  }
+  #theme-cursor.clicking svg{ transform:scale(.82); transition:transform .08s ease, color .8s ease; }
+  @media (hover:none), (pointer:coarse){
+    /* Telas de toque não têm cursor de mouse — volta ao padrão do sistema */
+    html, body, input, textarea, select, button, a, [role="button"], .btn, .lb-tab, label{ cursor:auto; }
+    #theme-cursor{ display:none; }
+  }
 </style>
 </head>
 <body>
+
+<div id="theme-cursor">
+  <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M4 2 L20 12 L4 22 L8 12 Z" fill="currentColor"/>
+  </svg>
+</div>
 
 <div id="wrap">
   <canvas id="game"></canvas>
@@ -682,20 +736,31 @@
   <div class="overlay" id="start-screen">
     <button class="gear-btn" id="gear-start-btn" title="Configurações" aria-label="Configurações"><img class="icon-img" src="data:image/png;base64,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" alt="Configurações"></button>
     <svg class="ship-logo big" viewBox="-20 -26 40 48"><path d="M0 -24 16 18 0 10 -16 18Z" fill="currentColor"/></svg>
-    <div class="eyebrow">Console de defesa orbital</div>
     <h1 class="game-title"><span class="wordmark">LETTR<span>I</span>X</span></h1>
-    <p class="tagline">Cada palavra é uma ameaça: acerte as letras antes que ela chegue.</p>
-    <button class="btn" id="start-btn">Iniciar</button>
+    <button class="btn" id="start-btn">Jogar</button>
     <button class="btn secondary" id="ranking-start-btn"><img class="icon-img" src="data:image/png;base64,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" alt=""> Ranking global</button>
     <button class="btn secondary" id="account-start-btn"><img class="icon-img" id="account-start-icon" src="" alt=""> <span id="account-start-label">Minha conta</span></button>
-    <button class="btn secondary" id="versus-start-btn">⚔ Modo 1v1</button>
-    <div class="hint">Pausar a qualquer momento com <kbd>Esc</kbd> · Idioma das palavras em <span id="lang-hint">Português</span></div>
+    <div class="hint">Pausar a qualquer momento com <kbd>Esc</kbd></div>
+  </div>
+
+  <!-- ESCOLHA DE MODO DE JOGO -->
+  <div class="overlay" id="play-mode-screen" hidden>
+    <h1 style="font-size:22px;letter-spacing:.2em;margin-bottom:18px;">ESCOLHA O MODO</h1>
+    <button class="btn" id="mode-solo-btn">Modo Solo</button>
+    <button class="btn secondary" id="mode-ranked-btn" style="border-color:var(--signal);color:var(--signal);">🏆 Ranqueado</button>
+    <button class="btn secondary" id="mode-friends-btn">⚔ 1v1 (com amigos)</button>
+    <div class="lb-status" id="play-mode-status"></div>
+    <button class="btn secondary" id="mode-back-btn" style="margin-top:18px;">Voltar</button>
   </div>
 
   <!-- RANKING GLOBAL -->
   <div class="overlay" id="ranking-screen" hidden>
-    <div class="eyebrow">Console de defesa orbital</div>
     <h1 style="font-size:26px;letter-spacing:.24em;margin-bottom:14px;">RANKING GLOBAL</h1>
+    <div class="lb-tabs">
+      <button class="lb-tab active" id="lb-tab-geral">Global</button>
+      <button class="lb-tab" id="lb-tab-ranqueado">Rankeado</button>
+      <button class="lb-tab" id="lb-tab-1v1">1v1</button>
+    </div>
     <div class="lb-status" id="lb-status">Carregando...</div>
     <div class="leaderboard-list" id="leaderboard-list"></div>
     <button class="btn" id="ranking-close-btn">Voltar</button>
@@ -703,7 +768,6 @@
 
   <!-- 1v1: MENU -->
   <div class="overlay" id="versus-screen" hidden>
-    <div class="eyebrow">Console de defesa orbital</div>
     <h1 style="font-size:26px;letter-spacing:.24em;margin-bottom:6px;">MODO 1V1</h1>
     <p class="tagline">Crie uma sala ou entre com um código. Os dois começam juntos e recebem as mesmas palavras — quem for mais longe, vence.</p>
     <div id="versus-name-box" style="width:100%;max-width:280px;box-sizing:border-box;margin-bottom:6px;">
@@ -716,9 +780,17 @@
     <button class="btn secondary" id="versus-menu-back-btn" style="margin-top:18px;">Voltar</button>
   </div>
 
+  <!-- 1v1: BUSCANDO OPONENTE RANQUEADO -->
+  <div class="overlay" id="versus-searching-screen" hidden>
+    <div class="eyebrow">Fila ranqueada</div>
+    <h1 style="font-size:22px;letter-spacing:.2em;margin-bottom:10px;">BUSCANDO OPONENTE…</h1>
+    <div id="searching-tier-badge" style="margin-bottom:14px;"></div>
+    <p class="tagline" id="versus-searching-status">Procurando alguém no seu nível…</p>
+    <button class="btn secondary" id="versus-searching-cancel-btn">Cancelar busca</button>
+  </div>
+
   <!-- 1v1: ENTRAR COM CÓDIGO -->
   <div class="overlay" id="versus-join-screen" hidden>
-    <div class="eyebrow">Console de defesa orbital</div>
     <h1 style="font-size:22px;letter-spacing:.2em;margin-bottom:14px;">ENTRAR NA SALA</h1>
     <input type="text" class="code-input" id="versus-join-input" placeholder="CÓDIGO" maxlength="5">
     <div class="lb-status" id="versus-join-status" style="margin-top:12px;"></div>
@@ -791,13 +863,13 @@
         <div class="vs-tag" id="vr-opp-tag"></div>
       </div>
     </div>
+    <div id="vr-ranked-info" hidden style="margin-bottom:10px;"></div>
     <button class="btn" id="versus-rematch-btn">Jogar de novo</button>
     <button class="btn secondary" id="versus-result-exit-btn">Sair da sala</button>
   </div>
 
   <!-- CONTA -->
   <div class="overlay" id="account-screen" hidden>
-    <div class="eyebrow">Console de defesa orbital</div>
     <h1 style="font-size:26px;letter-spacing:.24em;margin-bottom:14px;">CONTA</h1>
     <div class="lb-status" id="account-status"></div>
 
@@ -808,7 +880,6 @@
         <span id="profile-avatar-initials">?</span>
       </button>
       <input type="file" id="avatar-input" accept="image/*,.gif" hidden>
-      <div class="avatar-hint">Toque no avatar para trocar a foto (JPG, PNG ou GIF)</div>
       <button type="button" class="btn secondary" id="remove-avatar-btn" hidden style="max-width:none;width:auto;padding:6px 14px;font-size:10px;margin:0 0 14px;">Remover foto</button>
       <div class="profile-email" id="profile-email"></div>
       <div class="profile-provider" id="profile-provider"></div>
@@ -823,11 +894,12 @@
             <input type="text" id="username-input" placeholder="seu_usuario" maxlength="18">
             <button class="btn" id="save-username-btn">Salvar</button>
           </div>
-          <div class="profile-username-hint">3 a 18 letras minúsculas, números ou "_". Único — ninguém mais pode usar o mesmo @.</div>
+          <div class="profile-username-hint">2 a 18 letras minúsculas, números ou "_". Único — ninguém mais pode usar o mesmo @.</div>
           <div class="lb-status" id="username-status" style="margin:2px 0 0;"></div>
         </div>
       </div>
 
+      <button class="btn secondary" id="account-history-btn">📜 Histórico de partidas</button>
       <button class="btn secondary" id="account-logout-btn">Sair da conta</button>
     </div>
 
@@ -855,6 +927,14 @@
     </div>
 
     <button class="btn secondary" id="account-close-btn" style="margin-top:18px;">Voltar</button>
+  </div>
+
+  <!-- HISTÓRICO DE PARTIDAS -->
+  <div class="overlay" id="history-screen" hidden>
+    <h1 style="font-size:24px;letter-spacing:.2em;margin-bottom:14px;">HISTÓRICO</h1>
+    <div class="lb-status" id="history-status">Carregando...</div>
+    <div class="leaderboard-list" id="history-list"></div>
+    <button class="btn secondary" id="history-close-btn">Voltar</button>
   </div>
 
   <!-- AJUSTAR FOTO (enquadramento estilo Discord: zoom + arrastar) -->
@@ -895,7 +975,6 @@
 
   <!-- SETTINGS -->
   <div class="overlay" id="settings-screen" hidden>
-    <div class="eyebrow">Configurações</div>
     <h1 style="font-size:26px;letter-spacing:.24em;margin-bottom:4px;">AJUSTES</h1>
     <div class="settings-list">
       <div class="setting-row">
@@ -989,6 +1068,26 @@
   const SUPABASE_ANON_KEY = "sb_publishable_ZbFacpQrkm8wlwYhNfiMOQ_Vna4Wync";
   const LEADERBOARD_LIMIT = 10;
 
+  const RANK_TIERS = [
+    { name: "Plástico", min: 0,    color: "#9aa5ad" },
+    { name: "Ferro",    min: 400,  color: "#8d7a6b" },
+    { name: "Bronze",   min: 700,  color: "#cd7f32" },
+    { name: "Prata",    min: 1000, color: "#c8d3dc" },
+    { name: "Ouro",     min: 1300, color: "#ffb454" },
+    { name: "Platina",  min: 1600, color: "#5fe0c4" },
+    { name: "Diamante", min: 1900, color: "#7fc2ff" },
+    { name: "Mestre",   min: 2200, color: "#ff5f8f" }
+  ];
+  function tierForMmr(mmr){
+    let t = RANK_TIERS[0];
+    for (const tier of RANK_TIERS){ if (mmr >= tier.min) t = tier; }
+    return t;
+  }
+  function tierBadgeHTML(mmr){
+    const t = tierForMmr(mmr);
+    return `<span class="tier-badge" style="background:${t.color}22;color:${t.color};border:1px solid ${t.color}66;">${t.name} · ${mmr}</span>`;
+  }
+
   const supabaseConfigured =
     !SUPABASE_URL.includes("SEU-PROJETO") && !SUPABASE_ANON_KEY.includes("SUA-ANON-KEY");
 
@@ -1005,19 +1104,18 @@
     return res.json();
   }
 
-  async function submitScoreToLeaderboard(name, score, wave, lang, avatarUrl, avatarPos){
+  async function submitScoreToLeaderboard(userId, name, score, wave, lang, avatarUrl, avatarPos){
     if (!supabaseConfigured || !supabaseClient) throw new Error("not-configured");
     const { data: sessionData } = await supabaseClient.auth.getSession();
     const accessToken = sessionData.session && sessionData.session.access_token;
     if (!accessToken) throw new Error("not-authenticated");
 
-    // Antes isso era um POST simples, então cada partida virava uma linha nova
-    // e o mesmo @ podia aparecer várias vezes no ranking. Agora fazemos um
-    // upsert por "name" (o @): se a pontuação nova for maior que a salva, ela
-    // substitui; senão, mantemos a que já estava lá. Requer:
-    //   1) uma constraint UNIQUE na coluna "name" da tabela "scores"
-    //   2) a função SQL bump_score() (ver README/instruções) pra só atualizar
-    //      quando a pontuação nova for maior.
+    // Upsert por "user_id" (a conta): assim, trocar o @ ou a foto sempre
+    // reflete no ranking no próximo envio, mesmo que a pontuação não seja
+    // um novo recorde. A pontuação/onda/idioma só são sobrescritos quando
+    // o novo valor for maior que o recorde salvo. Requer:
+    //   1) uma coluna "user_id" (uuid) e constraint UNIQUE nela na tabela "scores"
+    //   2) a função SQL bump_score() (ver README/instruções) correspondente.
     const url = `${SUPABASE_URL}/rest/v1/rpc/bump_score`;
     const res = await fetch(url, {
       method: "POST",
@@ -1027,6 +1125,7 @@
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
+        p_user_id: userId,
         p_name: name.slice(0,18),
         p_score: score,
         p_wave: wave,
@@ -1037,6 +1136,114 @@
     });
     if (!res.ok) throw new Error("submit-failed");
   }
+
+  async function logMatchHistory(mode, result, score, wave, opponentName, mmrDelta){
+    if (!supabaseConfigured || !currentUser || !supabaseClient) return;
+    try{
+      const { data: sessionData } = await supabaseClient.auth.getSession();
+      const accessToken = sessionData.session && sessionData.session.access_token;
+      if (!accessToken) return;
+      await fetch(`${SUPABASE_URL}/rest/v1/match_history`, {
+        method: "POST",
+        headers: {
+          "apikey": SUPABASE_ANON_KEY,
+          "Authorization": `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+          "Prefer": "return=minimal"
+        },
+        body: JSON.stringify({
+          user_id: currentUser.id, mode, result: result || null,
+          score: (score === undefined ? null : score), wave: (wave === undefined ? null : wave),
+          opponent_name: opponentName || null,
+          mmr_delta: (mmrDelta === undefined ? null : mmrDelta)
+        })
+      });
+    }catch(e){ /* histórico é best-effort, nunca deve travar o jogo */ }
+  }
+
+  async function fetchMatchHistory(limit){
+    if (!supabaseConfigured || !currentUser || !supabaseClient) return [];
+    const { data: sessionData } = await supabaseClient.auth.getSession();
+    const accessToken = sessionData.session && sessionData.session.access_token;
+    if (!accessToken) return [];
+    const url = `${SUPABASE_URL}/rest/v1/match_history?select=*&user_id=eq.${currentUser.id}&order=created_at.desc&limit=${limit || 30}`;
+    const res = await fetch(url, {
+      headers: { "apikey": SUPABASE_ANON_KEY, "Authorization": `Bearer ${accessToken}` }
+    });
+    if (!res.ok) return [];
+    return res.json();
+  }
+
+
+  const MODE_LABELS = { solo: "Solo", casual_1v1: "1v1", ranked: "Ranqueada" };
+
+  async function renderMatchHistory(){
+    const statusEl = document.getElementById("history-status");
+    const listEl = document.getElementById("history-list");
+    listEl.innerHTML = "";
+    statusEl.classList.remove("error");
+    if (!currentUser){
+      statusEl.textContent = "Faça login pra ver seu histórico de partidas.";
+      return;
+    }
+    statusEl.textContent = "Carregando...";
+    try{
+      const rows = await fetchMatchHistory(30);
+      if (!rows.length){
+        statusEl.textContent = "Nenhuma partida registrada ainda.";
+        return;
+      }
+      statusEl.textContent = "";
+      rows.forEach(r => {
+        const row = document.createElement("div");
+        row.className = "hist-row";
+        const when = new Date(r.created_at);
+        const dateStr = when.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }) + " " +
+          when.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+        let detail = `Onda ${r.wave ?? "?"} · ${r.score ?? 0} pts`;
+        if (r.opponent_name) detail += ` · vs ${r.opponent_name}`;
+        if (r.mode === "ranked" && r.mmr_delta !== null && r.mmr_delta !== undefined){
+          const sign = r.mmr_delta >= 0 ? "+" : "";
+          detail += ` · ${sign}${r.mmr_delta} MMR`;
+        }
+        const resultLabel = r.result === "win" ? "Vitória" : r.result === "loss" ? "Derrota" : r.result === "tie" ? "Empate" : "—";
+        row.innerHTML = `
+          <div class="hist-mode">${MODE_LABELS[r.mode] || r.mode}</div>
+          <div class="hist-detail">${detail} <span style="color:var(--mist);font-size:10px;">· ${dateStr}</span></div>
+          <div class="hist-result ${r.result || ''}">${resultLabel}</div>
+        `;
+        listEl.appendChild(row);
+      });
+    }catch(e){
+      statusEl.textContent = "Não foi possível carregar o histórico agora.";
+      statusEl.classList.add("error");
+    }
+  }
+
+  async function fetchRankedLeaderboard(){
+    if (!supabaseConfigured) throw new Error("not-configured");
+    const url = `${SUPABASE_URL}/rest/v1/ranked_stats?select=name,mmr,wins,losses,games,avatar_url,avatar_pos&order=mmr.desc&limit=${LEADERBOARD_LIMIT}`;
+    const res = await fetch(url, {
+      headers: {
+        "apikey": SUPABASE_ANON_KEY,
+        "Authorization": `Bearer ${SUPABASE_ANON_KEY}`
+      }
+    });
+    if (!res.ok) throw new Error("fetch-failed");
+    return res.json();
+  }
+
+  async function fetchCasualLeaderboard(){
+    if (!supabaseConfigured) throw new Error("not-configured");
+    const url = `${SUPABASE_URL}/rest/v1/casual_versus_stats?select=name,wins,losses,games,avatar_url,avatar_pos&order=wins.desc&limit=${LEADERBOARD_LIMIT}`;
+    const res = await fetch(url, {
+      headers: { "apikey": SUPABASE_ANON_KEY, "Authorization": `Bearer ${SUPABASE_ANON_KEY}` }
+    });
+    if (!res.ok) throw new Error("fetch-failed");
+    return res.json();
+  }
+
+  let currentLeaderboardTab = "geral"; // "geral" | "ranqueado" | "1v1"
 
   async function renderLeaderboard(){
     const statusEl = document.getElementById("lb-status");
@@ -1050,21 +1257,35 @@
     }
     statusEl.textContent = "Carregando...";
     try{
-      const rows = await fetchTopScores();
+      const rows = currentLeaderboardTab === "ranqueado" ? await fetchRankedLeaderboard()
+        : currentLeaderboardTab === "1v1" ? await fetchCasualLeaderboard()
+        : await fetchTopScores();
       if (!rows.length){
-        statusEl.textContent = "Ninguém pontuou ainda. Seja o primeiro!";
+        statusEl.textContent = currentLeaderboardTab === "ranqueado"
+          ? "Ninguém jogou uma ranqueada ainda. Seja o primeiro!"
+          : currentLeaderboardTab === "1v1"
+          ? "Ninguém jogou um 1v1 casual ainda. Seja o primeiro!"
+          : "Ninguém pontuou ainda. Seja o primeiro!";
         return;
       }
       statusEl.textContent = "";
       rows.forEach((r, i) => {
         const row = document.createElement("div");
         row.className = "lb-row";
+        const metaHTML = currentLeaderboardTab === "ranqueado"
+          ? tierBadgeHTML(r.mmr)
+          : currentLeaderboardTab === "1v1"
+          ? `<div class="lb-meta">${r.games} partidas</div>`
+          : `<div class="lb-meta">Onda ${r.wave ?? "?"}</div>`;
+        const scoreHTML = (currentLeaderboardTab === "ranqueado" || currentLeaderboardTab === "1v1")
+          ? `${r.wins}V ${r.losses}D`
+          : r.score;
         row.innerHTML = `
           <div class="lb-rank">#${i+1}</div>
           <div class="lb-avatar"></div>
           <div class="lb-name"></div>
-          <div class="lb-meta">Onda ${r.wave ?? "?"}</div>
-          <div class="lb-score">${r.score}</div>
+          ${metaHTML}
+          <div class="lb-score">${scoreHTML}</div>
         `;
         row.querySelector(".lb-name").textContent = r.name || "Piloto anônimo";
         const avatarEl = row.querySelector(".lb-avatar");
@@ -1084,6 +1305,7 @@
       statusEl.classList.add("error");
     }
   }
+
 
   /* ============================= CONTA (Supabase Auth) =============================
      Usa o mesmo projeto Supabase do ranking. Além de e-mail/senha, dá pra habilitar
@@ -1149,7 +1371,7 @@
       profileBox.hidden = false;
       formsBox.hidden = true;
       const email = currentUser.email || "";
-      const avatarUrl = currentUser.user_metadata && currentUser.user_metadata.avatar_url;
+      const avatarUrl = currentUser.user_metadata && currentUser.user_metadata.custom_avatar_url;
       const avatarImg = document.getElementById("profile-avatar-img");
       const avatarInitials = document.getElementById("profile-avatar-initials");
       const removeAvatarBtn = document.getElementById("remove-avatar-btn");
@@ -1313,7 +1535,7 @@
     if (uploadError) throw uploadError;
     const { data } = supabaseClient.storage.from(AVATAR_BUCKET).getPublicUrl(path);
     const publicUrl = data.publicUrl + "?t=" + Date.now();
-    const { error: updateError } = await supabaseClient.auth.updateUser({ data: { avatar_url: publicUrl, avatar_pos: avatarPos } });
+    const { error: updateError } = await supabaseClient.auth.updateUser({ data: { custom_avatar_url: publicUrl, avatar_pos: avatarPos } });
     if (updateError) throw updateError;
     const { data: userData } = await supabaseClient.auth.getUser();
     currentUser = userData.user;
@@ -1326,7 +1548,7 @@
       .from(AVATAR_BUCKET)
       .remove([`${currentUser.id}/avatar.jpg`, `${currentUser.id}/avatar.gif`])
       .catch(() => {});
-    const { error: updateError } = await supabaseClient.auth.updateUser({ data: { avatar_url: null, avatar_pos: null } });
+    const { error: updateError } = await supabaseClient.auth.updateUser({ data: { custom_avatar_url: null, avatar_pos: null } });
     if (updateError) throw updateError;
     const { data: userData } = await supabaseClient.auth.getUser();
     currentUser = userData.user;
@@ -2372,6 +2594,15 @@
     combo = 0;
     words = words.filter(x => x.id !== w.id);
     trackedIds = trackedIds.filter(id => id !== w.id);
+    // Se a palavra que acabou de atingir a nave era a que o jogador estava
+    // digitando, limpa o texto digitado — senão ele ficava "preso" na tela
+    // mirando uma palavra que não existe mais.
+    if (typedBuffer && w.norm.startsWith(typedBuffer)){
+      typedBuffer = "";
+      typedHits = [];
+      trackedIds = [];
+      renderPrompt();
+    }
     updateHUD();
     if (lives <= 0){ endGame(); }
   }
@@ -2608,7 +2839,6 @@
   const volumeVal = document.getElementById("volume-val");
   const graphicsSeg = document.getElementById("graphics-seg");
   const languageSelect = document.getElementById("language-select");
-  const langHint = document.getElementById("lang-hint");
   let settingsReturnTo = "start";
   let stateBeforeSettings = "idle";
 
@@ -2617,7 +2847,6 @@
     volumeVal.textContent = settings.volume + "%";
     [...graphicsSeg.children].forEach(btn => btn.classList.toggle("active", btn.dataset.val === settings.graphics));
     languageSelect.value = settings.language;
-    langHint.textContent = LANGUAGE_NAMES[settings.language] || "Português";
   }
 
   volumeRange.addEventListener("input", () => {
@@ -2653,7 +2882,6 @@
     settings.language = lang;
     currentLanguage = lang;
     buildTiers(currentLanguage);
-    langHint.textContent = LANGUAGE_NAMES[currentLanguage] || "Português";
     saveSettings();
   }
 
@@ -2728,6 +2956,7 @@
         : "";
     gameoverScreen.hidden = false;
     updateScoreSubmitUI();
+    logMatchHistory("solo", null, score, wave, null, null);
   }
 
   function updateScoreSubmitUI(){
@@ -2769,9 +2998,9 @@
     submitStatus.classList.remove("error");
     submitStatus.textContent = "";
     try{
-      const avatarUrl = currentUser.user_metadata ? currentUser.user_metadata.avatar_url : null;
+      const avatarUrl = currentUser.user_metadata ? currentUser.user_metadata.custom_avatar_url : null;
       const avatarPos = currentUser.user_metadata ? currentUser.user_metadata.avatar_pos : null;
-      await submitScoreToLeaderboard(currentProfile.username, score, wave, currentLanguage, avatarUrl, avatarPos);
+      await submitScoreToLeaderboard(currentUser.id, currentProfile.username, score, wave, currentLanguage, avatarUrl, avatarPos);
       submitStatus.textContent = "Pontuação enviada!";
       btn.innerHTML = `Enviado <img class="icon-img" src="${ICONS.check}" alt="">`;
     }catch(e){
@@ -2787,17 +3016,33 @@
   });
 
   const rankingScreen = document.getElementById("ranking-screen");
+  function setLeaderboardTab(tab){
+    currentLeaderboardTab = tab;
+    ["geral","ranqueado","1v1"].forEach(t => {
+      document.getElementById("lb-tab-" + t).classList.toggle("active", t === tab);
+    });
+    renderLeaderboard();
+  }
   function openRanking(fromScreen){
     fromScreen.hidden = true;
     rankingScreen.hidden = false;
     rankingScreen.dataset.from = fromScreen.id;
-    renderLeaderboard();
+    setLeaderboardTab("geral");
   }
   document.getElementById("ranking-start-btn").addEventListener("click", () => openRanking(startScreen));
   document.getElementById("ranking-gameover-btn").addEventListener("click", () => openRanking(gameoverScreen));
   document.getElementById("ranking-close-btn").addEventListener("click", () => {
     rankingScreen.hidden = true;
     document.getElementById(rankingScreen.dataset.from || "start-screen").hidden = false;
+  });
+  document.getElementById("lb-tab-geral").addEventListener("click", () => {
+    if (currentLeaderboardTab !== "geral") setLeaderboardTab("geral");
+  });
+  document.getElementById("lb-tab-ranqueado").addEventListener("click", () => {
+    if (currentLeaderboardTab !== "ranqueado") setLeaderboardTab("ranqueado");
+  });
+  document.getElementById("lb-tab-1v1").addEventListener("click", () => {
+    if (currentLeaderboardTab !== "1v1") setLeaderboardTab("1v1");
   });
 
   /* ============================= CONTA: UI ============================= */
@@ -2815,6 +3060,17 @@
     accountScreen.hidden = true;
     document.getElementById(accountScreen.dataset.from || "start-screen").hidden = false;
     updateScoreSubmitUI();
+  });
+  document.getElementById("account-history-btn").addEventListener("click", () => {
+    accountScreen.hidden = true;
+    document.getElementById("history-screen").hidden = false;
+    document.getElementById("history-screen").dataset.from = accountScreen.dataset.from || "start-screen";
+    renderMatchHistory();
+  });
+  document.getElementById("history-close-btn").addEventListener("click", () => {
+    const historyScreen = document.getElementById("history-screen");
+    historyScreen.hidden = true;
+    accountScreen.hidden = false;
   });
 
   const authTabs = document.getElementById("auth-tabs");
@@ -2901,8 +3157,8 @@
     const raw = input.value.trim().toLowerCase();
     statusEl.classList.remove("error");
 
-    if (!/^[a-z0-9_]{3,18}$/.test(raw)){
-      statusEl.textContent = "Use de 3 a 18 letras minúsculas, números ou \"_\".";
+    if (!/^[a-z0-9_]{2,18}$/.test(raw)){
+      statusEl.textContent = "Use de 2 a 18 letras minúsculas, números ou \"_\".";
       statusEl.classList.add("error");
       return;
     }
@@ -3128,7 +3384,34 @@
     });
   }
 
-  document.getElementById("start-btn").addEventListener("click", startGame);
+  document.getElementById("start-btn").addEventListener("click", () => {
+    startScreen.hidden = true;
+    document.getElementById("play-mode-screen").hidden = false;
+  });
+  document.getElementById("mode-back-btn").addEventListener("click", () => {
+    document.getElementById("play-mode-screen").hidden = true;
+    startScreen.hidden = false;
+  });
+  document.getElementById("mode-solo-btn").addEventListener("click", () => {
+    document.getElementById("play-mode-screen").hidden = true;
+    startGame();
+  });
+  document.getElementById("mode-ranked-btn").addEventListener("click", () => {
+    if (!supabaseClient){
+      document.getElementById("play-mode-screen").hidden = true;
+      hideAllVersusScreens();
+      document.getElementById("versus-screen").hidden = false;
+      document.getElementById("versus-menu-status").textContent = "Contas/ranking ainda não configurados — o 1v1 precisa do Supabase.";
+      document.getElementById("versus-menu-status").classList.add("error");
+      return;
+    }
+    document.getElementById("play-mode-screen").hidden = true;
+    startRankedSearch();
+  });
+  document.getElementById("mode-friends-btn").addEventListener("click", () => {
+    document.getElementById("play-mode-screen").hidden = true;
+    openVersusMenu();
+  });
   document.getElementById("restart-btn").addEventListener("click", startGame);
   document.getElementById("resume-btn").addEventListener("click", () => togglePause(false));
   document.getElementById("quit-btn").addEventListener("click", () => {
@@ -3164,8 +3447,133 @@
     wordIdx: 0,
     myResult: null,
     oppResult: null,
-    finished: false
+    finished: false,
+    ranked: false            // true só quando a sala veio do matchmaking; salas por código nunca valem rank
   };
+
+  /* ============================= MATCHMAKING RANQUEADO ============================= */
+  const mmState = {
+    active: false,
+    myMmr: 1000,
+    interval: null,
+    hosting: false
+  };
+
+  async function fetchMyRankedStats(){
+    if (!supabaseConfigured || !currentUser) return { mmr: 1000, wins: 0, losses: 0, games: 0 };
+    const url = `${SUPABASE_URL}/rest/v1/ranked_stats?select=mmr,wins,losses,games&user_id=eq.${currentUser.id}`;
+    const res = await fetch(url, {
+      headers: { "apikey": SUPABASE_ANON_KEY, "Authorization": `Bearer ${SUPABASE_ANON_KEY}` }
+    });
+    if (!res.ok) return { mmr: 1000, wins: 0, losses: 0, games: 0 };
+    const rows = await res.json();
+    return rows[0] || { mmr: 1000, wins: 0, losses: 0, games: 0 };
+  }
+
+  async function startRankedSearch(){
+    if (!supabaseClient || !currentUser || !currentProfile || !currentProfile.username){
+      const st = document.getElementById("play-mode-status");
+      st.textContent = "Faça login e defina seu @ pra jogar ranqueada.";
+      st.classList.add("error");
+      return;
+    }
+    document.getElementById("play-mode-status").textContent = "";
+    document.getElementById("play-mode-status").classList.remove("error");
+    const stats = await fetchMyRankedStats();
+    mmState.myMmr = stats.mmr;
+    mmState.active = true;
+    mmState.hosting = false;
+
+    hideAllVersusScreens();
+    document.getElementById("versus-searching-screen").hidden = false;
+    document.getElementById("searching-tier-badge").innerHTML = tierBadgeHTML(mmState.myMmr);
+    document.getElementById("versus-searching-status").textContent = "Procurando alguém no seu nível…";
+
+    const av = versusMyAvatar();
+    const myId = currentUser.id;
+    try{
+      await supabaseClient.from("matchmaking_queue").delete().eq("user_id", myId);
+      await supabaseClient.from("matchmaking_queue").insert({
+        user_id: myId,
+        name: "@" + currentProfile.username,
+        avatar_url: av.avatarUrl,
+        avatar_pos: av.avatarPos,
+        mmr: mmState.myMmr
+      });
+    }catch(e){
+      cancelRankedSearch();
+      const st = document.getElementById("play-mode-status");
+      st.textContent = "Não foi possível entrar na fila agora.";
+      st.classList.add("error");
+      hideAllVersusScreens();
+      document.getElementById("play-mode-screen").hidden = false;
+      return;
+    }
+
+    mmState.interval = setInterval(pollMatchmakingQueue, 2000);
+    pollMatchmakingQueue();
+  }
+
+  async function cancelRankedSearch(){
+    mmState.active = false;
+    mmState.hosting = false;
+    if (mmState.interval){ clearInterval(mmState.interval); mmState.interval = null; }
+    if (currentUser){
+      try{ await supabaseClient.from("matchmaking_queue").delete().eq("user_id", currentUser.id); }catch(e){}
+    }
+  }
+
+  async function pollMatchmakingQueue(){
+    if (!mmState.active || !currentUser) return;
+    const myId = currentUser.id;
+    try{
+      const url = `${SUPABASE_URL}/rest/v1/matchmaking_queue?select=*&order=created_at.asc`;
+      const res = await fetch(url, {
+        headers: { "apikey": SUPABASE_ANON_KEY, "Authorization": `Bearer ${SUPABASE_ANON_KEY}` }
+      });
+      if (!res.ok) return;
+      const rows = await res.json();
+
+      // Alguém já me convidou pra sala dele?
+      const inviteRow = rows.find(r => r.invite_target === myId);
+      if (inviteRow){
+        mmState.active = false;
+        if (mmState.interval){ clearInterval(mmState.interval); mmState.interval = null; }
+        try{ await supabaseClient.from("matchmaking_queue").delete().eq("user_id", myId); }catch(e){}
+        openVersusChannel(inviteRow.invite_code, false, true);
+        return;
+      }
+
+      if (mmState.hosting) return; // já estou hospedando, só aguardando o adversário entrar
+
+      // Descarta minha própria linha, quem já está sendo convidado, e linhas velhas
+      // (alguém que fechou o app sem cancelar a busca — "fantasma" na fila).
+      const STALE_MS = 2 * 60 * 1000;
+      const now = Date.now();
+      const candidates = rows.filter(r =>
+        r.user_id !== myId && !r.invite_target && (now - new Date(r.created_at).getTime()) < STALE_MS
+      );
+      if (!candidates.length) return;
+
+      // Prefere o oponente com MMR mais próximo do meu
+      candidates.sort((a, b) => Math.abs(a.mmr - mmState.myMmr) - Math.abs(b.mmr - mmState.myMmr));
+      const opp = candidates[0];
+
+      // Só um dos dois lados cria a sala, decidido de forma determinística (mesmo id nos dois clientes)
+      if (myId < opp.user_id){
+        const code = randomRoomCode();
+        mmState.hosting = true;
+        await supabaseClient.from("matchmaking_queue")
+          .update({ invite_code: code, invite_target: opp.user_id })
+          .eq("user_id", myId);
+        document.getElementById("versus-searching-status").textContent = "Oponente encontrado! Preparando a sala…";
+        openVersusChannel(code, true, true);
+      }
+      // Se myId > opp.user_id, não faz nada: é o outro lado que vai me convidar.
+    }catch(e){ /* tenta de novo no próximo ciclo */ }
+  }
+
+
 
   function versusMyDisplayName(){
     if (currentProfile && currentProfile.username) return "@" + currentProfile.username;
@@ -3173,7 +3581,7 @@
     return typed || "Piloto";
   }
   function versusMyAvatar(){
-    const avatarUrl = currentUser && currentUser.user_metadata ? currentUser.user_metadata.avatar_url : null;
+    const avatarUrl = currentUser && currentUser.user_metadata ? currentUser.user_metadata.custom_avatar_url : null;
     const avatarPos = currentUser && currentUser.user_metadata ? currentUser.user_metadata.avatar_pos : null;
     return { avatarUrl: avatarUrl || null, avatarPos: avatarPos || null };
   }
@@ -3304,14 +3712,15 @@
 
   function hideAllVersusScreens(){
     ["versus-screen","versus-join-screen","versus-lobby-screen","versus-countdown-screen",
-     "versus-waiting-screen","versus-result-screen"].forEach(id => {
+     "versus-waiting-screen","versus-result-screen","versus-searching-screen","play-mode-screen"].forEach(id => {
       document.getElementById(id).hidden = true;
     });
   }
 
-  function openVersusChannel(code, isHost){
+  function openVersusChannel(code, isHost, ranked){
     versusState.code = code;
     versusState.isHost = isHost;
+    versusState.ranked = !!ranked;
     versusState.myId = (currentUser && currentUser.id) || ("guest-" + Math.random().toString(36).slice(2,10));
     versusState.me.name = versusMyDisplayName();
     const av = versusMyAvatar();
@@ -3328,11 +3737,29 @@
     versusState.channel = channel;
 
     channel.on("presence", { event: "sync" }, () => {
+      const hadOpponent = !!versusState.opponent;
       versusState.opponent = versusFindOpponent();
+      if (!hadOpponent && versusState.opponent && mmState.hosting){
+        mmState.hosting = false;
+        if (currentUser){
+          supabaseClient.from("matchmaking_queue").delete().eq("user_id", currentUser.id).then(() => {});
+        }
+      }
       if (!document.getElementById("versus-lobby-screen").hidden) renderVersusLobby();
     });
     channel.on("broadcast", { event: "match_start" }, ({ payload }) => handleVersusStart(payload));
     channel.on("broadcast", { event: "finish" }, ({ payload }) => handleVersusOpponentFinish(payload));
+    channel.on("broadcast", { event: "ranked_done" }, ({ payload }) => {
+      if (!currentUser || !versusState.myResult) return;
+      const oppName = versusState.opponent ? versusState.opponent.name : null;
+      if (payload.winnerId === currentUser.id){
+        showRankedDelta(payload.winnerMmr, payload.winnerDelta);
+        logMatchHistory("ranked", "win", versusState.myResult.score, versusState.myResult.wave, oppName, payload.winnerDelta);
+      } else if (payload.loserId === currentUser.id){
+        showRankedDelta(payload.loserMmr, payload.loserDelta);
+        logMatchHistory("ranked", "loss", versusState.myResult.score, versusState.myResult.wave, oppName, payload.loserDelta);
+      }
+    });
     channel.on("broadcast", { event: "leave" }, () => {
       versusState.opponent = null;
       if (!document.getElementById("versus-lobby-screen").hidden){
@@ -3360,11 +3787,16 @@
       try{ versusState.channel.send({ type: "broadcast", event: "leave", payload: {} }); }catch(e){}
       try{ versusState.channel.unsubscribe(); }catch(e){}
     }
+    if (mmState.hosting && currentUser){
+      supabaseClient.from("matchmaking_queue").delete().eq("user_id", currentUser.id).then(() => {});
+    }
+    mmState.hosting = false;
     versusState.channel = null;
     versusState.active = false;
     versusState.code = null;
     versusState.opponent = null;
     versusState.finished = false;
+    versusState.ranked = false;
   }
 
   function handleVersusStart(payload){
@@ -3472,12 +3904,118 @@
       title.textContent = "VOCÊ PERDEU";
     }
 
+    const matchResult = tie ? "tie" : (meWins ? "win" : "loss");
+    document.getElementById("vr-ranked-info").hidden = true;
+    if (versusState.ranked){
+      if (!tie && versusState.opponent){
+        submitRankedResult(meWins); // essa função também loga o histórico com o delta de MMR
+      } else if (tie){
+        logMatchHistory("ranked", "tie", me.score, me.wave, oppInfo.name, 0);
+      }
+    } else if (versusState.opponent){
+      logMatchHistory("casual_1v1", matchResult, me.score, me.wave, oppInfo.name, null);
+      const isGuestOpponent = String(versusState.opponent.id || "").startsWith("guest-");
+      const isGuestMe = String(versusState.myId || "").startsWith("guest-");
+      if (!tie && !isGuestOpponent && !isGuestMe && versusState.isHost){
+        submitCasualResult(meWins);
+      }
+    }
+
     hideAllVersusScreens();
     document.getElementById("versus-result-screen").hidden = false;
   }
 
+  // Só o anfitrião chama, mesma lógica de "single writer" do ranqueado.
+  async function submitCasualResult(meWins){
+    if (!currentUser || !versusState.opponent) return;
+    const winner = meWins
+      ? { id: currentUser.id, name: versusState.me.name, avatarUrl: versusState.me.avatarUrl, avatarPos: versusState.me.avatarPos }
+      : { id: versusState.opponent.id, name: versusState.opponent.name, avatarUrl: versusState.opponent.avatarUrl, avatarPos: versusState.opponent.avatarPos };
+    const loser = meWins
+      ? { id: versusState.opponent.id, name: versusState.opponent.name, avatarUrl: versusState.opponent.avatarUrl, avatarPos: versusState.opponent.avatarPos }
+      : { id: currentUser.id, name: versusState.me.name, avatarUrl: versusState.me.avatarUrl, avatarPos: versusState.me.avatarPos };
+    try{
+      const { data: sessionData } = await supabaseClient.auth.getSession();
+      const accessToken = sessionData.session && sessionData.session.access_token;
+      await fetch(`${SUPABASE_URL}/rest/v1/rpc/submit_casual_result`, {
+        method: "POST",
+        headers: {
+          "apikey": SUPABASE_ANON_KEY,
+          "Authorization": `Bearer ${accessToken}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          p_winner_id: winner.id, p_winner_name: winner.name,
+          p_winner_avatar_url: winner.avatarUrl, p_winner_avatar_pos: winner.avatarPos,
+          p_loser_id: loser.id, p_loser_name: loser.name,
+          p_loser_avatar_url: loser.avatarUrl, p_loser_avatar_pos: loser.avatarPos
+        })
+      });
+    }catch(e){ /* placar do 1v1 casual é best-effort */ }
+  }
+
+  function showRankedDelta(newMmr, delta){
+    mmState.myMmr = newMmr;
+    const el = document.getElementById("vr-ranked-info");
+    el.hidden = false;
+    const t = tierForMmr(newMmr);
+    const sign = delta >= 0 ? "+" : "";
+    el.innerHTML = `<span style="color:${t.color};background:${t.color}22;border:1px solid ${t.color}66;padding:4px 12px;border-radius:10px;">${t.name} · ${newMmr} MMR (${sign}${delta})</span>`;
+  }
+
+  // Só o anfitrião chama o RPC (evita gravar o mesmo resultado duas vezes);
+  // o adversário recebe o resultado via broadcast e só exibe.
+  async function submitRankedResult(meWins){
+    if (!versusState.isHost || !currentUser || !versusState.opponent) return;
+    const winner = meWins
+      ? { id: currentUser.id, name: versusState.me.name, avatarUrl: versusState.me.avatarUrl, avatarPos: versusState.me.avatarPos }
+      : { id: versusState.opponent.id, name: versusState.opponent.name, avatarUrl: versusState.opponent.avatarUrl, avatarPos: versusState.opponent.avatarPos };
+    const loser = meWins
+      ? { id: versusState.opponent.id, name: versusState.opponent.name, avatarUrl: versusState.opponent.avatarUrl, avatarPos: versusState.opponent.avatarPos }
+      : { id: currentUser.id, name: versusState.me.name, avatarUrl: versusState.me.avatarUrl, avatarPos: versusState.me.avatarPos };
+    try{
+      const { data: sessionData } = await supabaseClient.auth.getSession();
+      const accessToken = sessionData.session && sessionData.session.access_token;
+      const url = `${SUPABASE_URL}/rest/v1/rpc/submit_ranked_match`;
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          "apikey": SUPABASE_ANON_KEY,
+          "Authorization": `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+          "Prefer": "return=representation"
+        },
+        body: JSON.stringify({
+          p_winner_id: winner.id, p_winner_name: winner.name,
+          p_winner_avatar_url: winner.avatarUrl, p_winner_avatar_pos: winner.avatarPos,
+          p_loser_id: loser.id, p_loser_name: loser.name,
+          p_loser_avatar_url: loser.avatarUrl, p_loser_avatar_pos: loser.avatarPos
+        })
+      });
+      if (!res.ok) throw new Error("rpc-failed");
+      const rows = await res.json();
+      const row = rows[0];
+      const myDelta = meWins ? row.winner_delta : row.loser_delta;
+      const myNewMmr = meWins ? row.winner_mmr : row.loser_mmr;
+      showRankedDelta(myNewMmr, myDelta);
+      logMatchHistory("ranked", meWins ? "win" : "loss", versusState.myResult.score, versusState.myResult.wave, versusState.opponent.name, myDelta);
+      if (versusState.channel){
+        versusState.channel.send({
+          type: "broadcast", event: "ranked_done",
+          payload: {
+            winnerId: winner.id, winnerDelta: row.winner_delta, winnerMmr: row.winner_mmr,
+            loserId: loser.id, loserDelta: row.loser_delta, loserMmr: row.loser_mmr
+          }
+        });
+      }
+    }catch(e){
+      document.getElementById("vr-ranked-info").hidden = true;
+    }
+  }
+
+
   /* ---- Navegação das telas do 1v1 ---- */
-  document.getElementById("versus-start-btn").addEventListener("click", () => {
+  function openVersusMenu(){
     if (!supabaseClient){
       document.getElementById("versus-menu-status").textContent = "";
       hideAllVersusScreens();
@@ -3498,13 +4036,18 @@
       nameBox.hidden = false;
       if (!nameInput.value) nameInput.value = "";
     }
-  });
+  }
   document.getElementById("versus-menu-back-btn").addEventListener("click", () => {
     hideAllVersusScreens();
     startScreen.hidden = false;
   });
   document.getElementById("versus-create-btn").addEventListener("click", () => {
-    openVersusChannel(randomRoomCode(), true);
+    openVersusChannel(randomRoomCode(), true, false);
+  });
+  document.getElementById("versus-searching-cancel-btn").addEventListener("click", async () => {
+    await cancelRankedSearch();
+    hideAllVersusScreens();
+    document.getElementById("play-mode-screen").hidden = false;
   });
   document.getElementById("versus-join-open-btn").addEventListener("click", () => {
     hideAllVersusScreens();
@@ -3527,7 +4070,7 @@
       st.classList.add("error");
       return;
     }
-    openVersusChannel(code, false);
+    openVersusChannel(code, false, false);
   });
   document.getElementById("versus-lobby-start-btn").addEventListener("click", () => {
     if (!versusState.isHost || !versusState.opponent || !versusState.channel) return;
@@ -3538,9 +4081,10 @@
     handleVersusStart(payload);
   });
   document.getElementById("versus-lobby-leave-btn").addEventListener("click", () => {
+    const wasRanked = versusState.ranked;
     leaveVersusRoom();
     hideAllVersusScreens();
-    document.getElementById("versus-screen").hidden = false;
+    document.getElementById(wasRanked ? "play-mode-screen" : "versus-screen").hidden = false;
   });
   document.getElementById("versus-rematch-btn").addEventListener("click", () => {
     if (!versusState.channel){
@@ -3563,6 +4107,22 @@
     hideAllVersusScreens();
     startScreen.hidden = false;
   });
+
+  /* ============================= CURSOR TEMÁTICO ============================= */
+  (function initThemeCursor(){
+    const cursorEl = document.getElementById("theme-cursor");
+    if (!cursorEl) return;
+    let visible = false;
+    window.addEventListener("mousemove", (e) => {
+      if (!visible){ visible = true; }
+      // -6/-2 centraliza a "ponta" da naveznha aproximadamente no ponteiro real
+      cursorEl.style.transform = `translate(${e.clientX - 3}px, ${e.clientY - 8}px)`;
+    }, { passive: true });
+    window.addEventListener("mousedown", () => cursorEl.classList.add("clicking"));
+    window.addEventListener("mouseup", () => cursorEl.classList.remove("clicking"));
+    window.addEventListener("mouseleave", () => { cursorEl.style.transform = "translate(-999px,-999px)"; });
+    // Em telas de toque, nunca chega a se mover (CSS já esconde via media query).
+  })();
 
   /* ============================= INICIALIZAÇÃO ============================= */
   loadSettings();
