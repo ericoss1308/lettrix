@@ -3959,6 +3959,16 @@
     channel.on("broadcast", { event: "match_start" }, ({ payload }) => handleVersusStart(payload));
     channel.on("broadcast", { event: "finish" }, ({ payload }) => handleVersusOpponentFinish(payload));
     channel.on("broadcast", { event: "rematch_request" }, () => {
+      if (versusState.rematchLocked){
+        // Alguém (eu ou o adversário) já recusou a revanche desta partida —
+        // nem mostra o pedido de novo. Só devolve a recusa automaticamente,
+        // pra travar de vez o lado de quem mandou, mesmo que o botão dele
+        // tenha ficado clicável por algum motivo.
+        if (versusState.channel){
+          versusState.channel.send({ type: "broadcast", event: "rematch_decline", payload: {} });
+        }
+        return;
+      }
       if (versusState.rematch === "requesting"){
         // Os dois pediram revanche ao mesmo tempo — trata como aceite mútuo.
         startRematchLobby();
@@ -3972,9 +3982,13 @@
       startRematchLobby();
     });
     channel.on("broadcast", { event: "rematch_decline" }, () => {
-      if (versusState.rematch !== "requesting") return;
-      versusState.rematch = "idle";
+      // Trava o lock incondicionalmente (não só quando eu estava
+      // "requesting"): pode chegar como resposta automática do bloqueio
+      // acima também, e nesse caso quero garantir que fico travado de
+      // qualquer forma, sem depender do meu estado local exato.
       versusState.rematchLocked = true;
+      if (versusState.rematch !== "requesting"){ renderRematchUI(); return; }
+      versusState.rematch = "idle";
       renderRematchUI("O adversário recusou a revanche.");
     });
     channel.on("broadcast", { event: "rematch_cancel" }, () => {
@@ -4347,6 +4361,7 @@
     try{
       await supabaseClient.from("ranked_match_acks").insert({
         room_code: versusState.code,
+        match_seed: versusState.seed, // identifica ESTA partida (revanche = seed novo, mesma sala)
         user_id: currentUser.id,
         opponent_id: versusState.opponent.id
       });
@@ -4383,13 +4398,17 @@
         },
         body: JSON.stringify({
           p_room_code: versusState.code,
+          p_match_seed: versusState.seed,
           p_winner_id: winner.id, p_winner_name: winner.name,
           p_winner_avatar_url: winner.avatarUrl, p_winner_avatar_pos: winner.avatarPos,
           p_loser_id: loser.id, p_loser_name: loser.name,
           p_loser_avatar_url: loser.avatarUrl, p_loser_avatar_pos: loser.avatarPos
         })
       });
-      if (!res.ok) throw new Error("rpc-failed");
+      if (!res.ok){
+        const errBody = await res.text().catch(() => "");
+        throw new Error("rpc-failed: " + res.status + " " + errBody);
+      }
       const rows = await res.json();
       const row = rows[0];
       const myDelta = meWins ? row.winner_delta : row.loser_delta;
@@ -4406,7 +4425,14 @@
         });
       }
     }catch(e){
-      document.getElementById("vr-ranked-info").hidden = true;
+      // Antes isso falhava 100% em silêncio: o jogador não via nada e o
+      // MMR/ranking simplesmente não era atualizado, sem nenhuma pista do
+      // motivo. Agora pelo menos loga o erro real (abre o console pra ver
+      // a mensagem exata que o Postgres devolveu) e avisa na tela.
+      console.error("submitRankedResult falhou:", e);
+      const infoEl = document.getElementById("vr-ranked-info");
+      infoEl.hidden = false;
+      infoEl.textContent = "Não foi possível registrar o resultado ranqueado (erro de conexão com o servidor). Seu MMR não foi atualizado nesta partida.";
     }
   }
 
