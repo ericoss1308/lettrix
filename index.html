@@ -2606,7 +2606,14 @@
 
   // Reabre o teclado se ele fechar (ex: usuário deu um toque fora, ou o
   // navegador soltou o foco) enquanto a partida está em andamento.
-  wrapEl.addEventListener("pointerdown", () => {
+  // IMPORTANTE: tem que ser "click", não "pointerdown"/"touchstart". A
+  // maioria dos navegadores mobile (principalmente Safari iOS) só permite
+  // abrir o teclado virtual via .focus() quando chamado dentro de um gesto
+  // de toque já COMPLETO (click) — chamando no pointerdown (toque bruto,
+  // ainda em andamento) o foco até "pega" silenciosamente, mas o teclado
+  // não sobe. Era por isso que só um toque-e-segure (que conta como gesto
+  // completo por outro caminho) abria o teclado.
+  wrapEl.addEventListener("click", () => {
     if (state === "playing") focusMobileTyper();
   });
 
@@ -3637,6 +3644,7 @@
     finished: false,
     ranked: false,           // true só quando a sala veio do matchmaking; salas por código nunca valem rank
     abandonTimer: null,      // timeout de segurança da tela "esperando o adversário terminar"
+    rematchTimer: null,      // timeout de segurança do pedido de revanche pendente
     rematch: "idle"          // idle | requesting (eu pedi) | incoming (adversário pediu)
   };
 
@@ -3995,6 +4003,8 @@
   function leaveVersusRoom(){
     clearTimeout(versusState.abandonTimer);
     versusState.abandonTimer = null;
+    clearTimeout(versusState.rematchTimer);
+    versusState.rematchTimer = null;
     if (versusState.channel){
       try{ versusState.channel.send({ type: "broadcast", event: "leave", payload: {} }); }catch(e){}
       try{ versusState.channel.unsubscribe(); }catch(e){}
@@ -4172,10 +4182,22 @@
     const requestingBox = document.getElementById("vr-actions-requesting");
     const incomingBox = document.getElementById("vr-actions-incoming");
 
+    // Toda troca de estado reseta o timer de segurança: só fica armado
+    // enquanto eu estiver esperando uma resposta ("requesting"). Cobre o
+    // caso do adversário sumir sem soltar a presença a tempo (ex: celular
+    // bloqueou a tela) — depois de 30s sem resposta, cancela sozinho.
+    clearTimeout(versusState.rematchTimer);
+    versusState.rematchTimer = null;
+
     if (versusState.rematch === "requesting"){
       defaultBox.hidden = true; requestingBox.hidden = false; incomingBox.hidden = true;
       statusEl.hidden = false;
       statusEl.textContent = message || "Revanche solicitada — aguardando o adversário aceitar…";
+      versusState.rematchTimer = setTimeout(() => {
+        if (versusState.rematch !== "requesting") return;
+        versusState.rematch = "idle";
+        renderRematchUI("O adversário não respondeu ao pedido de revanche.");
+      }, 30000);
     } else if (versusState.rematch === "incoming"){
       defaultBox.hidden = true; requestingBox.hidden = true; incomingBox.hidden = false;
       statusEl.hidden = false;
@@ -4201,6 +4223,8 @@
   // manda pra sala de espera de novo, reaproveitando o mesmo fluxo do
   // convite original. Mantém o mesmo anfitrião da partida anterior.
   function startRematchLobby(){
+    clearTimeout(versusState.rematchTimer);
+    versusState.rematchTimer = null;
     versusState.rematch = "idle";
     versusState.myResult = null;
     versusState.oppResult = null;
