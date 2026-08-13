@@ -3003,6 +3003,31 @@
   }
   requestAnimationFrame(loop);
 
+  // requestAnimationFrame é pausado (ou muito reduzido) pelo próprio
+  // navegador quando a aba fica em segundo plano — é otimização de bateria
+  // do browser, não tem como o "loop" acima rodar normalmente nesse
+  // estado. Sem isso, o jogo dá a impressão de "congelar" ao trocar de
+  // aba, mesmo sem nenhuma pausa nossa. Enquanto a aba estiver escondida,
+  // mantemos a simulação viva via setInterval, que o navegador ainda
+  // dispara (só que numa frequência mais baixa) mesmo em segundo plano.
+  let bgInterval = null;
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden){
+      if (bgInterval) clearInterval(bgInterval);
+      let bgLastT = performance.now();
+      bgInterval = setInterval(() => {
+        const now = performance.now();
+        let dt = (now - bgLastT) / 1000;
+        bgLastT = now;
+        dt = Math.min(dt, 1); // evita um salto gigante se o navegador atrasar demais
+        if (state === "playing") update(dt);
+      }, 250);
+    } else {
+      if (bgInterval){ clearInterval(bgInterval); bgInterval = null; }
+      lastT = 0; // evita um dt gigante no primeiro frame do rAF ao voltar pra aba
+    }
+  });
+
   /* ============================= CONFIGURAÇÕES: UI ============================= */
   const settingsScreen = document.getElementById("settings-screen");
   const volumeRange = document.getElementById("volume-range");
@@ -3642,7 +3667,8 @@
     ranked: false,           // true só quando a sala veio do matchmaking; salas por código nunca valem rank
     abandonTimer: null,      // timeout de segurança da tela "esperando o adversário terminar"
     rematchTimer: null,      // timeout de segurança do pedido de revanche pendente
-    rematch: "idle"          // idle | requesting (eu pedi) | incoming (adversário pediu)
+    rematch: "idle",         // idle | requesting (eu pedi) | incoming (adversário pediu)
+    rematchLocked: false     // true depois de alguém recusar — bloqueia novo pedido nesta partida
   };
 
   /* ============================= MATCHMAKING RANQUEADO ============================= */
@@ -3948,6 +3974,7 @@
     channel.on("broadcast", { event: "rematch_decline" }, () => {
       if (versusState.rematch !== "requesting") return;
       versusState.rematch = "idle";
+      versusState.rematchLocked = true;
       renderRematchUI("O adversário recusou a revanche.");
     });
     channel.on("broadcast", { event: "rematch_cancel" }, () => {
@@ -4017,6 +4044,7 @@
     versusState.finished = false;
     versusState.ranked = false;
     versusState.rematch = "idle";
+    versusState.rematchLocked = false;
   }
 
   function handleVersusStart(payload){
@@ -4028,6 +4056,7 @@
     versusState.oppResult = null;
     versusState.finished = false;
     versusState.rematch = "idle";
+    versusState.rematchLocked = false; // nova partida de verdade começou — libera pedir revanche dela de novo depois
     ackRankedMatch();
 
     hideAllVersusScreens();
@@ -4202,7 +4231,14 @@
       statusEl.textContent = message || (name + " quer jogar de novo.");
     } else {
       defaultBox.hidden = false; requestingBox.hidden = true; incomingBox.hidden = true;
-      if (message){ statusEl.hidden = false; statusEl.textContent = message; }
+      const rematchBtn = document.getElementById("versus-rematch-btn");
+      // Depois de alguém recusar, não dá mais pra pedir revanche de novo
+      // nesta partida — some com o botão em vez de deixar tentar de novo.
+      rematchBtn.hidden = versusState.rematchLocked;
+      if (versusState.rematchLocked){
+        statusEl.hidden = false;
+        statusEl.textContent = message || "Revanche recusada — não é possível pedir de novo nesta partida.";
+      } else if (message){ statusEl.hidden = false; statusEl.textContent = message; }
       else { statusEl.hidden = true; statusEl.textContent = ""; }
     }
   }
@@ -4450,6 +4486,7 @@
     document.getElementById(wasRanked ? "play-mode-screen" : "versus-screen").hidden = false;
   });
   document.getElementById("versus-rematch-btn").addEventListener("click", () => {
+    if (versusState.rematchLocked) return; // recusada uma vez, não dá pra pedir de novo nesta partida
     if (!versusState.channel || !versusState.opponent){
       // Adversário já não está mais na sala — não tem pra quem pedir revanche.
       hideAllVersusScreens();
@@ -4475,6 +4512,7 @@
   });
   document.getElementById("versus-rematch-decline-btn").addEventListener("click", () => {
     versusState.rematch = "idle";
+    versusState.rematchLocked = true;
     renderRematchUI();
     if (versusState.channel){
       versusState.channel.send({ type: "broadcast", event: "rematch_decline", payload: {} });
