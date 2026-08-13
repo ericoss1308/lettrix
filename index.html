@@ -3615,12 +3615,9 @@
     startScreen.hidden = false;
   });
 
-  document.addEventListener("visibilitychange", () => {
-    // No ranqueado não existe pausa: se a pessoa trocar de app ou bloquear a
-    // tela, a partida continua rodando (e o adversário some via presence,
-    // ver handleVersusAbandon) em vez de ficar esperando ela voltar.
-    if (document.hidden && state === "playing" && !(versusState.active && versusState.ranked)) togglePause(true);
-  });
+  // Trocar de aba/app (alt-tab) não pausa mais o jogo em nenhum modo — a
+  // partida continua rodando em segundo plano. Pausa manual continua
+  // disponível pelo Esc (exceto no ranqueado, que não permite pausar).
 
   /* ============================= 1v1 (MODO VERSUS) =============================
      Usa o mesmo projeto Supabase do ranking/conta, via Realtime (broadcast +
@@ -4232,9 +4229,15 @@
     hideAllVersusScreens();
     document.getElementById("versus-lobby-screen").hidden = false;
     renderVersusLobby();
-    document.getElementById("versus-lobby-status").textContent = versusState.isHost
-      ? "Revanche aceita! Quando quiser, inicie a partida."
-      : "Revanche aceita! Aguardando o anfitrião iniciar…";
+    if (versusState.isHost){
+      document.getElementById("versus-lobby-status").textContent = "Revanche aceita! Preparando a partida…";
+      // A revanche já foi um combinado explícito dos dois lados (pedido +
+      // aceite), então não precisa de mais um clique em "Iniciar partida" —
+      // o anfitrião só inicia direto.
+      startVersusMatchAsHost();
+    } else {
+      document.getElementById("versus-lobby-status").textContent = "Revanche aceita! Preparando a partida…";
+    }
   }
 
   // Chamado quando a presença do adversário some no meio da partida (fechou
@@ -4430,14 +4433,16 @@
     }
     openVersusChannel(code, false, false);
   });
-  document.getElementById("versus-lobby-start-btn").addEventListener("click", () => {
+  function startVersusMatchAsHost(){
     if (!versusState.isHost || !versusState.opponent || !versusState.channel) return;
     const seed = Math.floor(Math.random() * 2**31);
     const startAt = Date.now() + 3200;
     const payload = { seed, lang: currentLanguage, startAt };
     versusState.channel.send({ type: "broadcast", event: "match_start", payload });
     handleVersusStart(payload);
-  });
+  }
+
+  document.getElementById("versus-lobby-start-btn").addEventListener("click", startVersusMatchAsHost);
   document.getElementById("versus-lobby-leave-btn").addEventListener("click", () => {
     const wasRanked = versusState.ranked;
     leaveVersusRoom();
