@@ -948,8 +948,18 @@
       </div>
     </div>
     <div id="vr-ranked-info" hidden style="margin-bottom:10px;"></div>
-    <button class="btn" id="versus-rematch-btn">Jogar de novo</button>
-    <button class="btn secondary" id="versus-result-exit-btn">Sair da sala</button>
+    <div class="lb-status" id="vr-rematch-status" hidden style="margin-bottom:10px;"></div>
+    <div id="vr-actions-default">
+      <button class="btn" id="versus-rematch-btn">Solicitar revanche</button>
+      <button class="btn secondary" id="versus-result-exit-btn">Encerrar missão</button>
+    </div>
+    <div id="vr-actions-requesting" hidden>
+      <button class="btn secondary" id="versus-rematch-cancel-btn">Cancelar pedido</button>
+    </div>
+    <div id="vr-actions-incoming" hidden>
+      <button class="btn" id="versus-rematch-accept-btn">Aceitar revanche</button>
+      <button class="btn secondary" id="versus-rematch-decline-btn">Recusar</button>
+    </div>
   </div>
 
   <!-- CONTA -->
@@ -3626,7 +3636,8 @@
     oppResult: null,
     finished: false,
     ranked: false,           // true só quando a sala veio do matchmaking; salas por código nunca valem rank
-    abandonTimer: null       // timeout de segurança da tela "esperando o adversário terminar"
+    abandonTimer: null,      // timeout de segurança da tela "esperando o adversário terminar"
+    rematch: "idle"          // idle | requesting (eu pedi) | incoming (adversário pediu)
   };
 
   /* ============================= MATCHMAKING RANQUEADO ============================= */
@@ -3896,6 +3907,15 @@
         return;
       }
 
+      // Mesma ideia, mas durante um pedido de revanche pendente (tela de
+      // resultado): não faz sentido continuar esperando aceite de alguém
+      // que já nem está mais conectado.
+      if (hadOpponent && !stillThere && versusState.rematch !== "idle"){
+        handleRematchOpponentGone();
+        versusState.opponent = null;
+        return;
+      }
+
       versusState.opponent = stillThere;
       if (!hadOpponent && versusState.opponent && mmState.hosting){
         mmState.hosting = false;
@@ -3907,6 +3927,29 @@
     });
     channel.on("broadcast", { event: "match_start" }, ({ payload }) => handleVersusStart(payload));
     channel.on("broadcast", { event: "finish" }, ({ payload }) => handleVersusOpponentFinish(payload));
+    channel.on("broadcast", { event: "rematch_request" }, () => {
+      if (versusState.rematch === "requesting"){
+        // Os dois pediram revanche ao mesmo tempo — trata como aceite mútuo.
+        startRematchLobby();
+        return;
+      }
+      versusState.rematch = "incoming";
+      renderRematchUI();
+    });
+    channel.on("broadcast", { event: "rematch_accept" }, () => {
+      if (versusState.rematch !== "requesting") return;
+      startRematchLobby();
+    });
+    channel.on("broadcast", { event: "rematch_decline" }, () => {
+      if (versusState.rematch !== "requesting") return;
+      versusState.rematch = "idle";
+      renderRematchUI("O adversário recusou a revanche.");
+    });
+    channel.on("broadcast", { event: "rematch_cancel" }, () => {
+      if (versusState.rematch !== "incoming") return;
+      versusState.rematch = "idle";
+      renderRematchUI();
+    });
     channel.on("broadcast", { event: "ranked_done" }, ({ payload }) => {
       if (!currentUser || !versusState.myResult) return;
       const oppName = versusState.opponent ? versusState.opponent.name : null;
@@ -3922,6 +3965,10 @@
       const matchInProgress = versusState.active || (!versusState.finished && versusState.myResult);
       if (matchInProgress){
         handleVersusAbandon();
+        return;
+      }
+      if (versusState.rematch !== "idle"){
+        handleRematchOpponentGone();
         return;
       }
       versusState.opponent = null;
@@ -3962,6 +4009,7 @@
     versusState.opponent = null;
     versusState.finished = false;
     versusState.ranked = false;
+    versusState.rematch = "idle";
   }
 
   function handleVersusStart(payload){
@@ -3972,6 +4020,7 @@
     versusState.myResult = null;
     versusState.oppResult = null;
     versusState.finished = false;
+    versusState.rematch = "idle";
     ackRankedMatch();
 
     hideAllVersusScreens();
@@ -4109,7 +4158,59 @@
     }
 
     hideAllVersusScreens();
+    gameoverScreen.hidden = true; // nunca deixa a tela de fim de jogo solo sobrepor a de resultado do 1v1
     document.getElementById("versus-result-screen").hidden = false;
+    versusState.rematch = "idle";
+    renderRematchUI();
+  }
+
+  // Mostra o grupo de botões certo na tela de resultado, de acordo com o
+  // estado do pedido de revanche (ninguém pediu / eu pedi / me pediram).
+  function renderRematchUI(message){
+    const statusEl = document.getElementById("vr-rematch-status");
+    const defaultBox = document.getElementById("vr-actions-default");
+    const requestingBox = document.getElementById("vr-actions-requesting");
+    const incomingBox = document.getElementById("vr-actions-incoming");
+
+    if (versusState.rematch === "requesting"){
+      defaultBox.hidden = true; requestingBox.hidden = false; incomingBox.hidden = true;
+      statusEl.hidden = false;
+      statusEl.textContent = message || "Revanche solicitada — aguardando o adversário aceitar…";
+    } else if (versusState.rematch === "incoming"){
+      defaultBox.hidden = true; requestingBox.hidden = true; incomingBox.hidden = false;
+      statusEl.hidden = false;
+      const name = versusState.opponent ? versusState.opponent.name : "O adversário";
+      statusEl.textContent = message || (name + " quer jogar de novo.");
+    } else {
+      defaultBox.hidden = false; requestingBox.hidden = true; incomingBox.hidden = true;
+      if (message){ statusEl.hidden = false; statusEl.textContent = message; }
+      else { statusEl.hidden = true; statusEl.textContent = ""; }
+    }
+  }
+
+  // O adversário sumiu (fechou o navegador, bloqueou a tela, caiu a conexão)
+  // enquanto um pedido de revanche estava pendente — cancela o pedido dos
+  // dois lados em vez de deixar alguém esperando um aceite que nunca vem.
+  function handleRematchOpponentGone(){
+    if (versusState.rematch === "idle") return;
+    versusState.rematch = "idle";
+    renderRematchUI("O adversário desconectou.");
+  }
+
+  // Os dois lados concordaram na revanche (ou pediram ao mesmo tempo) —
+  // manda pra sala de espera de novo, reaproveitando o mesmo fluxo do
+  // convite original. Mantém o mesmo anfitrião da partida anterior.
+  function startRematchLobby(){
+    versusState.rematch = "idle";
+    versusState.myResult = null;
+    versusState.oppResult = null;
+    versusState.finished = false;
+    hideAllVersusScreens();
+    document.getElementById("versus-lobby-screen").hidden = false;
+    renderVersusLobby();
+    document.getElementById("versus-lobby-status").textContent = versusState.isHost
+      ? "Revanche aceita! Quando quiser, inicie a partida."
+      : "Revanche aceita! Aguardando o anfitrião iniciar…";
   }
 
   // Chamado quando a presença do adversário some no meio da partida (fechou
@@ -4122,7 +4223,12 @@
     versusState.abandonTimer = null;
     if (!versusState.myResult){
       // A partida ainda estava rolando quando o adversário sumiu — encerra
-      // com o que eu já tinha feito até aqui.
+      // com o que eu já tinha feito até aqui, e trava o loop do jogo
+      // (senão o "update" continua rodando em segundo plano com o state
+      // ainda em "playing", a nave pode levar mais impactos, e a tela de
+      // fim de jogo solo acaba abrindo por cima da tela de resultado do
+      // 1v1 — as duas ficam sobrepostas).
+      state = "gameover";
       versusState.myResult = { score, wave, wordsDestroyed };
     }
     showVersusResults({ abandoned: true });
@@ -4315,19 +4421,34 @@
     document.getElementById(wasRanked ? "play-mode-screen" : "versus-screen").hidden = false;
   });
   document.getElementById("versus-rematch-btn").addEventListener("click", () => {
-    if (!versusState.channel){
+    if (!versusState.channel || !versusState.opponent){
+      // Adversário já não está mais na sala — não tem pra quem pedir revanche.
       hideAllVersusScreens();
       document.getElementById("versus-screen").hidden = false;
       return;
     }
-    versusState.myResult = null;
-    versusState.oppResult = null;
-    versusState.finished = false;
-    hideAllVersusScreens();
-    document.getElementById("versus-lobby-screen").hidden = false;
-    renderVersusLobby();
-    if (!versusState.isHost){
-      document.getElementById("versus-lobby-status").textContent = "Aguardando o anfitrião iniciar a revanche…";
+    versusState.rematch = "requesting";
+    renderRematchUI();
+    versusState.channel.send({ type: "broadcast", event: "rematch_request", payload: {} });
+  });
+  document.getElementById("versus-rematch-cancel-btn").addEventListener("click", () => {
+    versusState.rematch = "idle";
+    renderRematchUI();
+    if (versusState.channel){
+      versusState.channel.send({ type: "broadcast", event: "rematch_cancel", payload: {} });
+    }
+  });
+  document.getElementById("versus-rematch-accept-btn").addEventListener("click", () => {
+    if (versusState.channel){
+      versusState.channel.send({ type: "broadcast", event: "rematch_accept", payload: {} });
+    }
+    startRematchLobby();
+  });
+  document.getElementById("versus-rematch-decline-btn").addEventListener("click", () => {
+    versusState.rematch = "idle";
+    renderRematchUI();
+    if (versusState.channel){
+      versusState.channel.send({ type: "broadcast", event: "rematch_decline", payload: {} });
     }
   });
   document.getElementById("versus-result-exit-btn").addEventListener("click", () => {
