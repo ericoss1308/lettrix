@@ -4202,7 +4202,11 @@
       logMatchHistory("casual_1v1", matchResult, me.score, me.wave, oppInfo.name, null);
       const isGuestOpponent = String(versusState.opponent.id || "").startsWith("guest-");
       const isGuestMe = String(versusState.myId || "").startsWith("guest-");
-      if (!tie && !isGuestOpponent && !isGuestMe && versusState.isHost){
+      // Mesma lógica do ranqueado: em jogo normal só o host reporta (evita
+      // duplicar), mas em abandono quem sobrou reporta mesmo sem ser host —
+      // senão o placar do 1v1 casual nunca atualiza quando é o anfitrião
+      // quem desconecta.
+      if (!tie && !isGuestOpponent && !isGuestMe && (versusState.isHost || abandoned)){
         submitCasualResult(meWins);
       }
     }
@@ -4337,7 +4341,12 @@
           p_loser_avatar_url: loser.avatarUrl, p_loser_avatar_pos: loser.avatarPos
         })
       });
-    }catch(e){ /* placar do 1v1 casual é best-effort */ }
+    }catch(e){
+      // Placar do 1v1 casual é best-effort (não trava a experiência do
+      // jogador por causa disso), mas pelo menos loga o motivo real no
+      // console pra dar pra investigar se voltar a acontecer.
+      console.error("submitCasualResult falhou:", e);
+    }
   }
 
   function showRankedDelta(newMmr, delta){
