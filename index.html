@@ -1710,6 +1710,27 @@
     currentUser = userData.user;
   }
 
+  // Antes disso, trocar a foto ou o @ só refletia no ranking global na
+  // próxima vez que a pessoa jogasse uma partida — o ranking guarda uma
+  // cópia do nome/foto de quando cada resultado foi enviado, não busca ao
+  // vivo da conta. Chamamos isso logo depois de trocar foto/@ pra
+  // atualizar essa cópia na hora, sem precisar jogar de novo.
+  async function syncProfileToLeaderboards(){
+    if (!supabaseClient || !currentUser || !currentProfile || !currentProfile.username) return;
+    try{
+      const avatarUrl = currentUser.user_metadata ? currentUser.user_metadata.custom_avatar_url : null;
+      const avatarPos = currentUser.user_metadata ? currentUser.user_metadata.avatar_pos : null;
+      await supabaseClient.rpc("sync_profile_to_leaderboards", {
+        p_name: "@" + currentProfile.username,
+        p_avatar_url: avatarUrl || null,
+        p_avatar_pos: avatarPos || null
+      });
+    }catch(e){
+      // Best-effort: se falhar, a próxima partida jogada já corrige sozinha.
+      console.error("syncProfileToLeaderboards falhou:", e);
+    }
+  }
+
   /* ============================= BANCO DE PALAVRAS (multilíngue) ============================= */
   const WORD_POOLS = {
     pt: [
@@ -3398,6 +3419,7 @@
       statusEl.textContent = "";
       renderAccountUI();
       updateScoreSubmitUI();
+      syncProfileToLeaderboards(); // atualiza no ranking na hora, sem precisar jogar de novo
     }catch(e){
       statusEl.textContent = "Não foi possível salvar agora.";
       statusEl.classList.add("error");
@@ -3562,6 +3584,7 @@
       await uploadAvatar(file, pos.x, pos.y, zoom);
       statusEl.textContent = "Foto atualizada!";
       renderAccountUI();
+      syncProfileToLeaderboards(); // atualiza no ranking na hora, sem precisar jogar de novo
     }catch(err){
       statusEl.textContent = "Não foi possível enviar a foto agora. Verifique se o bucket \"avatars\" está configurado no Supabase.";
       statusEl.classList.add("error");
@@ -3579,6 +3602,7 @@
       await removeAvatar();
       statusEl.textContent = "Foto removida.";
       renderAccountUI();
+      syncProfileToLeaderboards(); // atualiza no ranking na hora, sem precisar jogar de novo
     }catch(err){
       statusEl.textContent = "Não foi possível remover a foto agora.";
       statusEl.classList.add("error");
