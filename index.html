@@ -263,6 +263,10 @@
   .gear-btn:hover{ color:var(--signal); border-color:var(--signal); transform:rotate(45deg); }
   .gear-btn img.icon-img{ width:56%; height:56%; opacity:.8; transition:opacity .12s ease; }
   .gear-btn:hover img.icon-img{ opacity:1; filter:drop-shadow(0 0 6px var(--signal-soft)); }
+  .hud-pause-btn{
+    position:absolute; bottom:clamp(8px,2vw,16px); right:clamp(8px,2vw,16px);
+    pointer-events:auto; /* #hud é pointer-events:none por padrão — precisa reativar só neste botão */
+  }
 
   /* ---------- Tela de configurações ---------- */
   .settings-list{
@@ -416,6 +420,7 @@
   .score-submit{
     width:min(100%, 340px); display:flex; flex-direction:column; gap:10px; margin:4px 0 18px;
   }
+  .score-submit[hidden]{ display:none; }
   .score-submit .row:not([hidden]){
     display:flex; align-items:center; gap:10px;
     background:var(--steel); border:1px solid var(--steel-line); border-radius:6px;
@@ -814,6 +819,15 @@
       </div>
     </div>
     <div id="prompt-bar"><span class="cursor"></span></div>
+    <button class="gear-btn hud-pause-btn" id="hud-pause-btn" title="Pausar / sair" aria-label="Pausar ou sair da partida">⏸</button>
+  </div>
+
+  <!-- CONFIRMAR DESISTÊNCIA (ranqueado, onde não existe pausa normal) -->
+  <div class="overlay" id="ranked-forfeit-screen" hidden>
+    <h1 style="font-size:22px;">DESISTIR DA PARTIDA?</h1>
+    <p class="tagline" style="margin-bottom:18px;">No ranqueado não dá pra pausar — se sair agora, conta como derrota.</p>
+    <button class="btn secondary" id="ranked-forfeit-confirm-btn">Desistir (derrota)</button>
+    <button class="btn" id="ranked-forfeit-cancel-btn">Continuar jogando</button>
   </div>
 
   <!-- START -->
@@ -2534,7 +2548,9 @@
       if (!document.getElementById("versus-join-screen").hidden){ document.getElementById("versus-join-back-btn").click(); return; }
       if (!document.getElementById("versus-screen").hidden){ document.getElementById("versus-menu-back-btn").click(); return; }
       if (!document.getElementById("play-mode-screen").hidden){ document.getElementById("mode-back-btn").click(); return; }
-      if (state === "playing" && !(versusState.active && versusState.ranked)) togglePause(true);
+      if (!document.getElementById("ranked-forfeit-screen").hidden){ document.getElementById("ranked-forfeit-cancel-btn").click(); return; }
+      if (state === "playing" && versusState.active && versusState.ranked){ document.getElementById("ranked-forfeit-screen").hidden = false; return; }
+      if (state === "playing") togglePause(true);
       else if (state === "paused") togglePause(false);
       return;
     }
@@ -3003,28 +3019,34 @@
   }
   requestAnimationFrame(loop);
 
-  // requestAnimationFrame é pausado (ou muito reduzido) pelo próprio
-  // navegador quando a aba fica em segundo plano — é otimização de bateria
-  // do browser, não tem como o "loop" acima rodar normalmente nesse
-  // estado. Sem isso, o jogo dá a impressão de "congelar" ao trocar de
-  // aba, mesmo sem nenhuma pausa nossa. Enquanto a aba estiver escondida,
-  // mantemos a simulação viva via setInterval, que o navegador ainda
-  // dispara (só que numa frequência mais baixa) mesmo em segundo plano.
-  let bgInterval = null;
+  // requestAnimationFrame é pausado (ou muito reduzido) pelo navegador
+  // quando a aba fica em segundo plano — otimização de bateria, não tem
+  // como evitar que o "loop" pare de rodar nesse estado. Em vez de tentar
+  // manter um timer "vivo" escondido (que os navegadores também throttlam
+  // de forma inconsistente, principalmente o Chrome depois de alguns
+  // segundos), calculamos o tempo real que passou quando a aba volta a
+  // ficar visível e aplicamos isso de uma vez em "degraus" — garante que o
+  // jogo realmente avançou (e você pode ter tomado impacto) enquanto
+  // estava fora, em vez de parecer que ficou parado esperando você voltar.
+  let hiddenAt = 0;
   document.addEventListener("visibilitychange", () => {
     if (document.hidden){
-      if (bgInterval) clearInterval(bgInterval);
-      let bgLastT = performance.now();
-      bgInterval = setInterval(() => {
-        const now = performance.now();
-        let dt = (now - bgLastT) / 1000;
-        bgLastT = now;
-        dt = Math.min(dt, 1); // evita um salto gigante se o navegador atrasar demais
-        if (state === "playing") update(dt);
-      }, 250);
-    } else {
-      if (bgInterval){ clearInterval(bgInterval); bgInterval = null; }
-      lastT = 0; // evita um dt gigante no primeiro frame do rAF ao voltar pra aba
+      hiddenAt = performance.now();
+      return;
+    }
+    if (!hiddenAt) return;
+    const elapsed = (performance.now() - hiddenAt) / 1000;
+    hiddenAt = 0;
+    lastT = 0; // evita um dt gigante no próximo frame do rAF
+    if (state !== "playing" || elapsed <= 0) return;
+    // Teto de 20s simulados: se a pessoa ficou horas fora, não faz sentido
+    // travar a aba processando isso tudo de uma vez — 20s de jogo sem
+    // interação já é mais que suficiente pra "perder" de qualquer forma.
+    let remaining = Math.min(elapsed, 20);
+    while (remaining > 0 && state === "playing"){
+      const step = Math.min(remaining, 0.5);
+      update(step);
+      remaining -= step;
     }
   });
 
@@ -3630,14 +3652,38 @@
   });
   document.getElementById("restart-btn").addEventListener("click", startGame);
   document.getElementById("resume-btn").addEventListener("click", () => togglePause(false));
-  document.getElementById("quit-btn").addEventListener("click", () => {
+  function quitToMenu(){
     togglePause(false);
     state = "idle";
     pauseScreen.hidden = true;
+    document.getElementById("ranked-forfeit-screen").hidden = true;
     if (versusState.active){
       leaveVersusRoom();
     }
     startScreen.hidden = false;
+  }
+  document.getElementById("quit-btn").addEventListener("click", quitToMenu);
+
+  // No ranqueado não existe pausa — esse botão/tecla abre uma confirmação de
+  // desistência (conta como derrota) em vez de pausar. Nos outros modos,
+  // funciona como o Esc: abre a pausa normal (que já tem "Encerrar missão").
+  document.getElementById("hud-pause-btn").addEventListener("click", () => {
+    if (state !== "playing") return;
+    if (versusState.active && versusState.ranked){
+      document.getElementById("ranked-forfeit-screen").hidden = false;
+    } else {
+      togglePause(true);
+    }
+  });
+  document.getElementById("ranked-forfeit-cancel-btn").addEventListener("click", () => {
+    document.getElementById("ranked-forfeit-screen").hidden = true;
+  });
+  document.getElementById("ranked-forfeit-confirm-btn").addEventListener("click", () => {
+    // Não reporta o resultado localmente pra evitar corrida com o outro
+    // lado — o "leave" avisa o adversário, e o sistema de abandono que já
+    // existe (handleVersusAbandon) cuida de registrar a vitória por W.O.
+    // dele (ou seja, minha derrota) no servidor.
+    quitToMenu();
   });
 
   // Trocar de aba/app (alt-tab) não pausa mais o jogo em nenhum modo — a
@@ -4215,7 +4261,15 @@
     gameoverScreen.hidden = true; // nunca deixa a tela de fim de jogo solo sobrepor a de resultado do 1v1
     document.getElementById("versus-result-screen").hidden = false;
     versusState.rematch = "idle";
-    renderRematchUI();
+    // Em abandono não tem pra quem pedir revanche — o adversário já foi
+    // embora (fechou o navegador, caiu a conexão etc). Trava o botão igual
+    // fazemos numa recusa, só que com uma mensagem que explica o motivo certo.
+    if (abandoned){
+      versusState.rematchLocked = true;
+      renderRematchUI("O adversário saiu da sala — não é possível pedir revanche.");
+    } else {
+      renderRematchUI();
+    }
   }
 
   // Mostra o grupo de botões certo na tela de resultado, de acordo com o
