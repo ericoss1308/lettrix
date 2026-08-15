@@ -154,6 +154,9 @@
     position:absolute; inset:0;
     display:flex; align-items:center; justify-content:center;
     flex-direction:column; text-align:center;
+    z-index:5; /* precisa ficar acima do #hud e do botão de pausa (z-index:2) — senão, sem esse
+                  valor, eles "vazam" por cima de qualquer tela aberta (configurações, pausa,
+                  fim de jogo etc.), mesmo vindo depois no HTML */
     background:radial-gradient(ellipse at 50% 40%, rgba(15,26,41,.92), rgba(5,7,13,.97));
     padding:clamp(10px,3vw,24px);
     overflow-y:auto;
