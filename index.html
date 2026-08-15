@@ -252,7 +252,7 @@
 
   /* ---------- Botão de configurações ---------- */
   .gear-btn{
-    position:absolute; top:clamp(8px,2vw,16px); right:clamp(8px,2vw,16px);
+    position:absolute; bottom:clamp(8px,2vw,16px); left:clamp(8px,2vw,16px);
     width:clamp(26px,6vw,34px); height:clamp(26px,6vw,34px); border-radius:50%;
     background:rgba(9,14,22,.6); border:1px solid var(--steel-line);
     color:var(--mist); font-size:clamp(12px,2.6vw,16px); cursor:pointer;
@@ -264,7 +264,7 @@
   .gear-btn img.icon-img{ width:56%; height:56%; opacity:.8; transition:opacity .12s ease; }
   .gear-btn:hover img.icon-img{ opacity:1; filter:drop-shadow(0 0 6px var(--signal-soft)); }
   .hud-pause-btn{
-    position:absolute; bottom:clamp(8px,2vw,16px); right:clamp(8px,2vw,16px);
+    position:absolute; top:auto; left:auto; bottom:clamp(8px,2vw,16px); right:clamp(8px,2vw,16px);
     pointer-events:auto; /* #hud é pointer-events:none por padrão — precisa reativar só neste botão */
   }
 
@@ -710,7 +710,8 @@
   /* ---------- Responsividade fina para telas muito pequenas ---------- */
   @media (max-width: 480px){
     .tagline{ padding:0 4px; }
-    .gear-btn{ top:6px; right:6px; }
+    .gear-btn:not(.hud-pause-btn){ bottom:6px; left:6px; }
+    .hud-pause-btn{ bottom:6px; right:6px; }
   }
   @media (max-height: 420px) and (orientation: landscape){
     .overlay{ justify-content:flex-start; padding-top:10px; }
