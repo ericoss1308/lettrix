@@ -261,10 +261,10 @@
     z-index:2;
   }
   .gear-btn:hover{ color:var(--signal); border-color:var(--signal); transform:rotate(45deg); }
-  .gear-btn img.icon-img{ width:56%; height:56%; opacity:.8; transition:opacity .12s ease; }
+  .gear-btn img.icon-img{ display:block; margin:0; width:56%; height:56%; opacity:.8; transition:opacity .12s ease; }
   .gear-btn:hover img.icon-img{ opacity:1; filter:drop-shadow(0 0 6px var(--signal-soft)); }
   .hud-pause-btn{
-    position:absolute; top:auto; left:auto; bottom:clamp(8px,2vw,16px); right:clamp(8px,2vw,16px);
+    position:absolute; top:auto; right:auto; bottom:clamp(8px,2vw,16px); left:clamp(8px,2vw,16px);
     pointer-events:auto; /* #hud é pointer-events:none por padrão — precisa reativar só neste botão */
   }
 
@@ -711,7 +711,7 @@
   @media (max-width: 480px){
     .tagline{ padding:0 4px; }
     .gear-btn:not(.hud-pause-btn){ bottom:6px; left:6px; }
-    .hud-pause-btn{ bottom:6px; right:6px; }
+    .hud-pause-btn{ bottom:6px; left:6px; }
   }
   @media (max-height: 420px) and (orientation: landscape){
     .overlay{ justify-content:flex-start; padding-top:10px; }
@@ -1172,6 +1172,7 @@
       <div class="lb-status" id="submit-status" style="margin:6px 0 0;"></div>
     </div>
     <button class="btn" id="restart-btn">Jogar novamente</button>
+    <button class="btn secondary" id="gameover-quit-btn">Encerrar missão</button>
     <button class="btn secondary" id="ranking-gameover-btn"><img class="icon-img" src="data:image/png;base64,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" alt=""> Ver ranking</button>
     <div class="hint" id="best-hint"></div>
   </div>
@@ -3693,6 +3694,7 @@
     togglePause(false);
     state = "idle";
     pauseScreen.hidden = true;
+    gameoverScreen.hidden = true;
     document.getElementById("ranked-forfeit-screen").hidden = true;
     if (versusState.active){
       leaveVersusRoom();
@@ -3700,6 +3702,7 @@
     startScreen.hidden = false;
   }
   document.getElementById("quit-btn").addEventListener("click", quitToMenu);
+  document.getElementById("gameover-quit-btn").addEventListener("click", quitToMenu);
 
   // No ranqueado não existe pausa — esse botão/tecla abre uma confirmação de
   // desistência (conta como derrota) em vez de pausar. Nos outros modos,
