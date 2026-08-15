@@ -3051,23 +3051,35 @@
   // estava fora, em vez de parecer que ficou parado esperando você voltar.
   let hiddenAt = 0;
   document.addEventListener("visibilitychange", () => {
-    if (document.hidden){
-      hiddenAt = performance.now();
-      return;
-    }
-    if (!hiddenAt) return;
-    const elapsed = (performance.now() - hiddenAt) / 1000;
-    hiddenAt = 0;
-    lastT = 0; // evita um dt gigante no próximo frame do rAF
-    if (state !== "playing" || elapsed <= 0) return;
-    // Teto de 20s simulados: se a pessoa ficou horas fora, não faz sentido
-    // travar a aba processando isso tudo de uma vez — 20s de jogo sem
-    // interação já é mais que suficiente pra "perder" de qualquer forma.
-    let remaining = Math.min(elapsed, 20);
-    while (remaining > 0 && state === "playing"){
-      const step = Math.min(remaining, 0.5);
-      update(step);
-      remaining -= step;
+    try{
+      if (document.hidden){
+        hiddenAt = performance.now();
+        console.log("[lettrix] aba escondida em", hiddenAt);
+        return;
+      }
+      if (!hiddenAt){
+        console.log("[lettrix] aba voltou mas hiddenAt estava zerado, não faz nada");
+        return;
+      }
+      const elapsed = (performance.now() - hiddenAt) / 1000;
+      hiddenAt = 0;
+      lastT = 0; // evita um dt gigante no próximo frame do rAF
+      console.log("[lettrix] aba voltou depois de", elapsed.toFixed(2), "s — state atual:", state);
+      if (state !== "playing" || elapsed <= 0) return;
+      // Teto de 20s simulados: se a pessoa ficou horas fora, não faz sentido
+      // travar a aba processando isso tudo de uma vez — 20s de jogo sem
+      // interação já é mais que suficiente pra "perder" de qualquer forma.
+      let remaining = Math.min(elapsed, 20);
+      let steps = 0;
+      while (remaining > 0 && state === "playing"){
+        const step = Math.min(remaining, 0.5);
+        update(step);
+        remaining -= step;
+        steps++;
+      }
+      console.log("[lettrix] catch-up aplicado em", steps, "passos, state final:", state);
+    }catch(err){
+      console.error("[lettrix] ERRO no catch-up de visibilitychange:", err);
     }
   });
 
